@@ -154,7 +154,7 @@ export class MailService {
           const invitee = req.user;
           await mailerAdapter.mailSend({
             to: user.email,
-            subject: 'You’ve been invited to a Base',
+            subject: 'You’ve been given access to a schedule on FanJam',
             html: await this.renderMail('BaseInvite', {
               baseTitle: base.title,
               name: extractDisplayNameFromEmail(

@@ -34,25 +34,18 @@ export const Welcome = ({ email, link }: WelcomeTemplateProps) => (
             {email}
           </Section>
           <Text className="text-gray-600 text-center text-sm !mt-0">
-            We're thrilled to have you on board! 🚀 Turn your databases into
-            powerful smart tables and manage your data the way you want — no
-            code required.
+            FanJam is an event planning app for conventions.
           </Text>
           <Text className="text-gray-600 text-center text-sm !mt-0">
-            Get started by creating your first project or exploring templates to
-            see what’s possible.
-          </Text>
-          <Text className="text-gray-600 text-center text-sm !mt-0">
-            Need help? Our docs and community are just a click away.
-          </Text>
-          <Text className="text-gray-600 text-center text-sm !mt-0 !mb-6">
-            Let’s build something amazing together! 💡
+            For small to medium-size cons, FanJam bridges the gap between a
+            single person with a spreadsheet and the kinds of people who can
+            afford enterprise event planning software. Free for small cons.
           </Text>
           <Button
             className="text-center w-full text-base font-bold bg-brand-500 text-white rounded-lg h-10"
             href={link}
           >
-            <Text className="!my-[8px]">Go to your Workspace</Text>
+            <Text className="!my-[8px]">Go to your schedule</Text>
           </Button>
         </ContentWrapper>
         <Footer />

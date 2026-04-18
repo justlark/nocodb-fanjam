@@ -55,7 +55,7 @@ const code = computed(
   () => `
 {
   "mcpServers": {
-    "NocoDB Base - ${openedProject.value?.title}": {
+    "FanJam Base - ${openedProject.value?.title}": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -120,7 +120,7 @@ const code = computed(
                 </span>
               </template>
               <div class="relative flex flex-col leading-6 text-nc-content-gray-subtle2 gap-3 my-3">
-                Get started with the NocoDB MCP with Claude Desktop in 3 simple steps
+                Get started with the FanJam MCP with Claude Desktop in 3 simple steps
 
                 <ol class="list-decimal pl-5">
                   <li>Navigate to Claude Desktop settings from the navigation bar.</li>
@@ -148,7 +148,7 @@ const code = computed(
                 </span>
               </template>
               <div class="relative flex flex-col leading-6 text-nc-content-gray-subtle2 gap-3 my-3">
-                Get started with the NocoDB MCP with Cursor in 3 simple steps
+                Get started with the FanJam MCP with Cursor in 3 simple steps
 
                 <ol class="list-decimal pl-5">
                   <li>Open Cursor Settings (press Shift+Cmd+J)</li>
@@ -175,7 +175,7 @@ const code = computed(
                 </span>
               </template>
               <div class="relative flex flex-col leading-6 text-nc-content-gray-subtle2 gap-3 my-3">
-                Get started with the NocoDB MCP with Windsurf in 4 simple steps
+                Get started with the FanJam MCP with Windsurf in 4 simple steps
 
                 <ol class="list-decimal pl-5">
                   <li>Access Windsurf settings and Select Cascade Tab in the left sidebar</li>

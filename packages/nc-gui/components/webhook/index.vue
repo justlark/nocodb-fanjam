@@ -1047,7 +1047,7 @@ const webhookV2AndV3Diff = computed(() => {
                 class="nc-link"
                 target="_blank"
               >
-                NocoDB Docs.
+                FanJam Docs.
               </a>
             </div>
           </div>

@@ -13,7 +13,7 @@ export const ContentWrapper = ({
       <Section className="py-6 m-auto bg-gray-50 border border-gray-200 border-solid rounded-t-xl">
         <Img
           alt="FanJam"
-          src="https://fanjam.live/icons/icon-padded.png"
+          src="https://fanjam.live/icons/icon.png"
           width={40}
           style={{ display: 'block', margin: 'auto auto' }}
           height={40}

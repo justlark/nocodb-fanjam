@@ -130,7 +130,7 @@ export default `<!doctype html>
                                    <tr>
                                    <td style="font-family: sans-serif; font-size: 14px;padding: 20px 5px 10px 5px; " colspan="2">
                                      <a href="https://fanjam.live" target="_blank">
-                                        <img src="https://fanjam.live/icons/icon-padded.png" alt="FanJam" width="150" style=" vertical-align: middle">
+                                        <img src="https://fanjam.live/icons/icon.png" alt="FanJam" width="150" style=" vertical-align: middle">
                                      </a>
                                    </td>
                                    </tr>

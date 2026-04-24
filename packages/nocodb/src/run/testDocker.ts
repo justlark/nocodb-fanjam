@@ -4,13 +4,27 @@ import cors from 'cors';
 import express from 'express';
 import Noco from '~/Noco';
 import { User } from '~/models';
-import { handleUncaughtErrors } from '~/utils';
-handleUncaughtErrors(process);
-
-// Node.js 22 exits on unhandledRejection by default. In tests we want the
-// backend to stay alive so workers get 401/500 errors rather than ECONNREFUSED.
+// In test mode we never want the backend to crash — workers should get
+// proper HTTP error responses rather than ECONNREFUSED. Log all errors but
+// don't exit (production entry points use handleUncaughtErrors instead).
+process.on('uncaughtException', (err) => {
+  console.error('[testDocker uncaughtException]', err);
+});
 process.on('unhandledRejection', (err) => {
   console.error('[testDocker unhandledRejection]', err);
+});
+process.on('exit', (code) => {
+  console.error('[testDocker exit] process exiting with code', code);
+});
+// Override process.exit to capture the callsite stack in the log
+const _originalExit = process.exit.bind(process);
+(process as any).exit = (code?: number) => {
+  console.error('[testDocker process.exit called with code', code, ']', new Error().stack);
+  _originalExit(code);
+};
+process.on('SIGTERM', () => {
+  console.error('[testDocker SIGTERM received]');
+  _originalExit(0);
 });
 
 process.env.NC_VERSION = '0009044';

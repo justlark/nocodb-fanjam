@@ -17,7 +17,7 @@ const email = computed(() => user.value?.email ?? '---')
 
 const refreshSidebar = ref(false)
 
-useTitle(route.meta?.title && te(route.meta.title) ? `${t(route.meta.title)}` : 'NocoDB')
+useTitle(route.meta?.title && te(route.meta.title) ? `${t(route.meta.title)}` : 'FanJam')
 
 const isPublic = computed(() => route.meta?.public)
 

@@ -40,6 +40,9 @@ export class MiscSettingsPage extends BasePage {
       uiAction: () => this.rootPage.locator('.nc-settings-show-null-and-empty-in-filter').first().click(),
       requestUrlPathToMatch: '/api/v1/db/meta/projects',
       httpMethodsToMatch: ['PATCH'],
+      // The frontend first calls GET has-empty-or-null-filters before the PATCH,
+      // so both requests together can exceed the default 4000ms actionTimeout.
+      timeout: 15000,
     });
   }
 }

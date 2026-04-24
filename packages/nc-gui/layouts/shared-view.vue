@@ -43,7 +43,7 @@ onMounted(() => {
   if (sharedView.value?.title) {
     document.title = `${sharedView.value.title}`
   } else {
-    document.title = 'NocoDB'
+    document.title = 'FanJam'
   }
 })
 </script>
@@ -66,11 +66,11 @@ export default {
           <div class="flex items-center gap-6 h-7 max-w-[calc(100%_-_280px)] xs:max-w-[calc(100%_-_90px)]">
             <a
               class="transition-all duration-200 cursor-pointer transform hover:scale-105"
-              href="https://github.com/nocodb/nocodb"
+              href="https://fanjam.live"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <img width="96" alt="NocoDB" src="~/assets/img/brand/nocodb.png" class="flex-none min-w-[96px]" />
+              <img width="96" alt="FanJam" src="~/assets/img/brand/nocodb.png" class="flex-none min-w-[96px]" />
             </a>
 
             <div class="flex items-center gap-2 text-gray-900 text-sm truncate">

@@ -42,7 +42,7 @@ const FEATURES = [
   {
     id: 'ai_features',
     title: 'AI features',
-    description: 'Unlock AI features to enhance your NocoDB experience.',
+    description: 'Unlock AI features to enhance your FanJam experience.',
     enabled: true,
     version: 3,
     isEE: true,
@@ -51,7 +51,7 @@ const FEATURES = [
   {
     id: 'ai_beta_features',
     title: 'AI beta features',
-    description: 'Unlock AI beta features to enhance your NocoDB experience.',
+    description: 'Unlock AI beta features to enhance your FanJam experience.',
     enabled: false,
     version: 2,
     isEngineering: true,
@@ -111,7 +111,7 @@ const FEATURES = [
   {
     id: 'extensions',
     title: 'Extensions',
-    description: 'Extensions allows you to add new features or functionalities to the NocoDB platform.',
+    description: 'Extensions allows you to add new features or functionalities to the FanJam platform.',
     enabled: ncIsPlaywright(),
     version: 3,
     isEngineering: true,

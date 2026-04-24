@@ -7,7 +7,7 @@ export default ({
 }): string => `<!DOCTYPE html>
 <html>
 <head>
-    <title>NocoDB : API Docs</title>
+    <title>FanJam : API Docs</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
     <link rel="shortcut icon" href="${ncSiteUrl}/favicon.ico" />
     <link rel="stylesheet" href="${ncSiteUrl}/css/swagger-ui.css"/>

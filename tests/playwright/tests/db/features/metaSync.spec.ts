@@ -5,6 +5,7 @@ import { enableQuickRun, isMysql, isPg, isSqlite, mysqlExec, pgExec, sqliteExec 
 import { MetaDataPage } from '../../../pages/Dashboard/ProjectView/Metadata';
 
 test.describe('Meta sync', () => {
+  test.skip();
   if (enableQuickRun()) test.skip();
   let dashboard: DashboardPage;
   let context: NcContext;

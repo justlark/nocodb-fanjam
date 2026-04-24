@@ -7,6 +7,12 @@ import { User } from '~/models';
 import { handleUncaughtErrors } from '~/utils';
 handleUncaughtErrors(process);
 
+// Node.js 22 exits on unhandledRejection by default. In tests we want the
+// backend to stay alive so workers get 401/500 errors rather than ECONNREFUSED.
+process.on('unhandledRejection', (err) => {
+  console.error('[testDocker unhandledRejection]', err);
+});
+
 process.env.NC_VERSION = '0009044';
 
 // ref: https://github.com/nodejs/node/issues/40702#issuecomment-1103623246

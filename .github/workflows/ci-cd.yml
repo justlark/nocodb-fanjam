@@ -63,7 +63,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.3
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
@@ -98,7 +98,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.3
       - name: Setup Node
         uses: actions/setup-node@v3
         with:

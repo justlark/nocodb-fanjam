@@ -14,4 +14,5 @@ export function handleUncaughtErrors(process: NodeJS.Process) {
       process.exit(1);
     }
   });
+
 }

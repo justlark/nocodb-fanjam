@@ -253,7 +253,7 @@ export const getFormattedViewTabTitle = ({
   isSharedView?: boolean
 }) => {
   if (isSharedView) {
-    return viewName || 'NocoDB'
+    return viewName || 'FanJam'
   }
 
   let title = `${viewName} | ${tableName} | ${baseName}`

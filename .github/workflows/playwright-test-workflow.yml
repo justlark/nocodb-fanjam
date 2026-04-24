@@ -27,7 +27,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 9.15.3
       - name: Get pnpm store directory
         shell: bash
         run: |
@@ -83,7 +83,7 @@ jobs:
           while ! curl --output /dev/null --silent --head --fail http://localhost:8080; do
             printf '.'
             sleep 2
-          done          
+          done
           echo "Backend is up"
         timeout-minutes: 5
       - name: Run Playwright Tests

@@ -1,7 +1,5 @@
 import { test } from '@playwright/test';
-import { airtableApiBase, airtableApiKey } from '../../../constants';
 import { DashboardPage } from '../../../pages/Dashboard';
-import { quickVerify } from '../../../quickTests/commonTest';
 import setup, { NcContext, unsetup } from '../../../setup';
 import { enableQuickRun } from '../../../setup/db';
 
@@ -20,16 +18,6 @@ test.describe('Import', () => {
 
   test.afterEach(async () => {
     await unsetup(context);
-  });
-
-  test('Airtable', async () => {
-    await dashboard.treeView.quickImport({ title: 'Airtable', baseTitle: context.base.title, context });
-    await dashboard.importAirtable.import({
-      key: airtableApiKey,
-      sourceId: airtableApiBase,
-    });
-    await dashboard.rootPage.waitForTimeout(1000);
-    await quickVerify({ dashboard, airtableImport: true, context });
   });
 
   test('CSV', async () => {

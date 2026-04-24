@@ -9,19 +9,19 @@ const socialIcons = [
     e: 'c:nocodb:twitter-open',
   },
   {
-    name: 'NocoDB',
+    name: 'FanJam',
     icon: iconMap.youtube,
     e: 'c:nocodb:youtube-open',
     link: 'https://www.youtube.com/@nocodb',
   },
   {
-    name: 'NocoDB',
+    name: 'FanJam',
     icon: iconMap.iconDiscord,
     e: 'c:nocodb:discord-open',
     link: 'http://discord.nocodb.com',
   },
   {
-    name: 'r/NocoDB',
+    name: 'r/FanJam',
     icon: iconMap.iconReddit,
     e: 'c:nocodb:reddit-open',
     link: 'https://www.reddit.com/r/NocoDB/',

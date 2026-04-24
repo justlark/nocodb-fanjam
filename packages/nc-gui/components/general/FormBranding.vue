@@ -7,6 +7,6 @@
   >
     <GeneralIcon icon="nocodb1" class="w-7 h-7 -my-0.5" />
 
-    <div class="text-sm">NocoDB Forms</div>
+    <div class="text-sm">FanJam Forms</div>
   </div>
 </template>

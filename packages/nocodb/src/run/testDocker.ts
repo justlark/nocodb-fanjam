@@ -13,20 +13,6 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => {
   console.error('[testDocker unhandledRejection]', err);
 });
-process.on('exit', (code) => {
-  console.error('[testDocker exit] process exiting with code', code);
-});
-// Override process.exit to capture the callsite stack in the log
-const _originalExit = process.exit.bind(process);
-(process as any).exit = (code?: number) => {
-  console.error('[testDocker process.exit called with code', code, ']', new Error().stack);
-  _originalExit(code);
-};
-process.on('SIGTERM', () => {
-  console.error('[testDocker SIGTERM received]');
-  _originalExit(0);
-});
-
 process.env.NC_VERSION = '0009044';
 
 // ref: https://github.com/nodejs/node/issues/40702#issuecomment-1103623246

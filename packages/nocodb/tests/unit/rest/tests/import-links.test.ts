@@ -65,10 +65,13 @@ function importLinksTests() {
       body,
     });
 
+  // supertest's `.send()` mishandles bare primitives (it tries to compute the
+  // byte length of e.g. `1` and throws); always wrap link bodies in an array
+  // so the controller still sees the intended payload.
   const nestedLink = (modelId: string, columnId: string, rowId: string, body: any) =>
     ncAxiosPost({
       url: `/api/v2/tables/${modelId}/links/${columnId}/records/${encodeURIComponent(rowId)}`,
-      body,
+      body: Array.isArray(body) ? body : [body],
       status: 201,
     });
 

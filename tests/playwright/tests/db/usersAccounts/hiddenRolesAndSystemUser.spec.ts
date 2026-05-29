@@ -79,6 +79,14 @@ test.describe('Hidden roles and system user', () => {
     await expect(list.locator('.user-row').filter({ hasText: context.rootUser.email })).toHaveCount(0);
   });
 
+  const assertVisibleRoles = async (menu: ReturnType<typeof dashboard.rootPage.locator>) => {
+    await expect(menu.locator('.nc-role-select-editor')).toHaveCount(1);
+    await expect(menu.locator('.nc-role-select-commenter')).toHaveCount(1);
+    await expect(menu.locator('.nc-role-select-viewer')).toHaveCount(1);
+    await expect(menu.locator('.nc-role-select-creator')).toHaveCount(0);
+    await expect(menu.locator('.nc-role-select-owner')).toHaveCount(0);
+  };
+
   test('Per-row role dropdown hides Creator and Owner', async () => {
     if (isEE()) test.skip();
     await openAccessSettings();
@@ -89,14 +97,10 @@ test.describe('Hidden roles and system user', () => {
     await row.waitFor({ state: 'visible' });
 
     await row.locator('.nc-roles-selector').click();
-    const menu = dashboard.rootPage.locator('.nc-role-select-dropdown:visible').last();
+    const menu = dashboard.rootPage.locator('.nc-role-selector-dropdown:visible').last();
     await menu.waitFor({ state: 'visible' });
 
-    await expect(menu.locator('.nc-role-select-editor')).toHaveCount(1);
-    await expect(menu.locator('.nc-role-select-commenter')).toHaveCount(1);
-    await expect(menu.locator('.nc-role-select-viewer')).toHaveCount(1);
-    await expect(menu.locator('.nc-role-select-creator')).toHaveCount(0);
-    await expect(menu.locator('.nc-role-select-owner')).toHaveCount(0);
+    await assertVisibleRoles(menu);
   });
 
   test('Add Members invite dialog hides Creator and Owner', async () => {
@@ -112,13 +116,9 @@ test.describe('Hidden roles and system user', () => {
     await inviteDlg.waitFor({ state: 'visible' });
 
     await inviteDlg.locator('.nc-invite-role-selector').click();
-    const menu = dashboard.rootPage.locator('.nc-role-select-dropdown:visible').last();
+    const menu = dashboard.rootPage.locator('.nc-role-selector-dropdown:visible').last();
     await menu.waitFor({ state: 'visible' });
 
-    await expect(menu.locator('.nc-role-select-editor')).toHaveCount(1);
-    await expect(menu.locator('.nc-role-select-commenter')).toHaveCount(1);
-    await expect(menu.locator('.nc-role-select-viewer')).toHaveCount(1);
-    await expect(menu.locator('.nc-role-select-creator')).toHaveCount(0);
-    await expect(menu.locator('.nc-role-select-owner')).toHaveCount(0);
+    await assertVisibleRoles(menu);
   });
 });

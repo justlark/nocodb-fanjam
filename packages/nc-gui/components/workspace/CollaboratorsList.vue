@@ -7,6 +7,7 @@ import {
   PlanTitles,
   WorkspaceUserRoles,
 } from 'nocodb-sdk'
+import { VISIBLE_WORKSPACE_ROLES, isHiddenSystemRole } from '~/helpers/roleVisibility'
 
 const props = defineProps<{
   workspaceId?: string
@@ -68,12 +69,14 @@ const { height: toSectionHeight } = useElementSize(topSectionRef)
 
 const { height: tableHeaderSectionHeight } = useElementSize(tableHeaderSectionRef)
 
+const visibleCollaborators = computed(() => {
+  return (collaborators.value ?? []).filter((collab) => !isHiddenSystemRole(collab.roles))
+})
+
 const filterCollaborators = computed(() => {
-  if (!userSearchText.value) return collaborators.value ?? []
+  if (!userSearchText.value) return visibleCollaborators.value
 
-  if (!collaborators.value) return []
-
-  return collaborators.value.filter(
+  return visibleCollaborators.value.filter(
     (collab) =>
       searchCompare([collab.display_name, collab.email], userSearchText.value) && !removingCollaboratorMap.value[collab.id],
   )
@@ -156,7 +159,7 @@ const accessibleRoles = computed<WorkspaceUserRoles[]>(() => {
     (role) => workspaceRoles.value && Object.keys(workspaceRoles.value).includes(role),
   )
   if (currentRoleIndex === -1) return []
-  return OrderedWorkspaceRoles.slice(currentRoleIndex).filter((r) => r)
+  return OrderedWorkspaceRoles.slice(currentRoleIndex).filter((r) => r && VISIBLE_WORKSPACE_ROLES.includes(r))
 })
 
 onMounted(async () => {

@@ -50,16 +50,12 @@ const onDescriptionUpdateClick = () => {
   emits('descriptionUpdate')
 }
 
-const quickImportDialogTypes: ImportType[] = [ImportType.CSV, ImportType.EXCEL]
+const quickImportDialogTypes: ImportType[] = [ImportType.CSV]
 
 const importAlias = {
   csv: {
     title: 'CSV',
     icon: iconMap.ncFileTypeCsvSmall,
-  },
-  excel: {
-    title: 'Excel',
-    icon: iconMap.ncFileTypeExcel,
   },
 }
 
@@ -337,24 +333,6 @@ defineOptions({
           </template>
         </NcSubMenu>
       </template>
-      <NcSubMenu key="download" variant="small">
-        <template #title>
-          <div
-            v-e="[
-              'c:download',
-              {
-                sidebar: props.inSidebar,
-              },
-            ]"
-            class="nc-base-menu-item group nc-view-context-download-option"
-          >
-            <GeneralIcon icon="download" class="opacity-80" />
-            {{ $t('general.download') }}
-          </div>
-        </template>
-
-        <LazySmartsheetToolbarExportSubActions />
-      </NcSubMenu>
     </template>
 
     <template v-if="isUIAllowed('viewCreateOrEdit')">

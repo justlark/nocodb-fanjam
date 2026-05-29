@@ -220,11 +220,13 @@ export class ToolbarPage extends BasePage {
   }
 
   async validateViewsMenu(param: { role: string; mode?: string }) {
+    // Download submenu is gone; the only action-menu entry that still varies
+    // by role is Upload (CSV import), which requires create permission.
     const menuItems = {
-      creator: ['Download', 'Upload'],
-      editor: ['Download', 'Upload'],
-      commenter: ['CSV'],
-      viewer: ['CSV'],
+      creator: ['Upload'],
+      editor: ['Upload'],
+      commenter: [],
+      viewer: [],
     };
     const vMenu = this.rootPage.locator('.nc-dropdown-actions-menu:visible');
     for (const item of menuItems[param.role.toLowerCase()]) {

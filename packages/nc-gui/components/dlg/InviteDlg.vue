@@ -10,6 +10,7 @@ import {
 } from 'nocodb-sdk'
 
 import { extractEmail } from '../../helpers/parsers/parserHelpers'
+import { VISIBLE_PROJECT_ROLES, VISIBLE_WORKSPACE_ROLES } from '../../helpers/roleVisibility'
 
 const props = defineProps<{
   modelValue: boolean
@@ -103,13 +104,18 @@ watch(dialogShow, async (newVal) => {
   if (newVal) {
     try {
       const rolesArr = Object.values(orderedRoles.value)
+      const visibleSet = props.type === 'base' ? VISIBLE_PROJECT_ROLES : VISIBLE_WORKSPACE_ROLES
       const currentRoleIndex = rolesArr.findIndex((role) => userRoles.value && Object.keys(userRoles.value).includes(role))
       if (currentRoleIndex !== -1) {
-        allowedRoles.value = rolesArr.slice(currentRoleIndex)
-        disabledRoles.value = rolesArr.slice(0, currentRoleIndex)
+        allowedRoles.value = rolesArr.slice(currentRoleIndex).filter((r) => visibleSet.includes(r as any))
+        disabledRoles.value = rolesArr.slice(0, currentRoleIndex).filter((r) => visibleSet.includes(r as any))
       } else {
-        allowedRoles.value = rolesArr
+        allowedRoles.value = rolesArr.filter((r) => visibleSet.includes(r as any))
         disabledRoles.value = []
+      }
+
+      if (!allowedRoles.value.includes(inviteData.roles as any)) {
+        inviteData.roles = (allowedRoles.value[0] ?? orderedRoles.value.NO_ACCESS) as any
       }
     } catch (e: any) {
       message.error(await extractSdkResponseErrorMsg(e))

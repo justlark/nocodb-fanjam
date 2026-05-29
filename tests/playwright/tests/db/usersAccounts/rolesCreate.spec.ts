@@ -6,8 +6,8 @@ import { ProjectsPage } from '../../../pages/ProjectsPage';
 import { getDefaultPwd } from '../../../tests/utils/general';
 import { isEE } from '../../../setup/db';
 
+// FanJam: Creator/Owner roles are hidden from the UI and cannot be invited.
 const roleDb = [
-  { email: 'creator@nocodb.com', role: 'creator', url: '' },
   { email: 'editor@nocodb.com', role: 'editor', url: '' },
   { email: 'commenter@nocodb.com', role: 'commenter', url: '' },
   { email: 'viewer@nocodb.com', role: 'viewer', url: '' },
@@ -83,11 +83,11 @@ test.describe.skip('User roles', () => {
     // Access control validation
     await dashboard.treeView.verifyTable({
       title: 'Language',
-      exists: roleDb[roleIdx].role === 'creator' ? true : false,
+      exists: false,
     });
     await dashboard.treeView.verifyTable({
       title: 'CustomerList',
-      exists: roleDb[roleIdx].role === 'creator' ? true : false,
+      exists: false,
     });
 
     // Base page validation
@@ -98,7 +98,7 @@ test.describe.skip('User roles', () => {
 
     await projectsPage.openProject({
       title: context.base.title,
-      waitForAuthTab: roleDb[roleIdx].role === 'creator',
+      waitForAuthTab: false,
       withoutPrefix: true,
     });
   }
@@ -111,11 +111,5 @@ test.describe.skip('User roles', () => {
       email: roleDb[roleIdx].email,
       password: getDefaultPwd(),
     });
-
-    // await workspacePage.baseOpen({ title: context.base.title }); //??
-
-    // close 'Team & Auth' tab
-    if (roleDb[roleIdx].role === 'creator') {
-    }
   }
 });

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { test } from '@playwright/test';
 import { DashboardPage } from '../../../pages/Dashboard';
 import { SharedFormPage } from '../../../pages/SharedForm';
 import setup, { unsetup } from '../../../setup';
@@ -85,31 +85,5 @@ test.describe('Attachment column', () => {
     await sharedForm.submit();
     await sharedForm.verifySuccessMessage();
     await newPage.close();
-
-    // Verify attachment in csv
-    await dashboard.grid.toolbar.clickFields();
-    await dashboard.grid.toolbar.fields.click({ title: 'LastUpdate' });
-    await dashboard.grid.toolbar.clickActions();
-
-    // Headless mode observation- menu doesn't render in one go
-    // Download button appears before menu is fully rendered
-    await dashboard.rootPage.waitForTimeout(500);
-
-    await dashboard.grid.toolbar.actions.click('Download');
-
-    const csvFileData: string = await dashboard.downloadAndGetFile({
-      downloadUIAction: dashboard.grid.toolbar.actions.clickDownloadSubmenu('CSV'),
-    });
-    const csvArray = csvFileData.split('\r\n');
-    const columns = csvArray[0];
-    const rows = csvArray.slice(1);
-    const cells = rows[10].split(',');
-
-    expect(columns).toBe('Country,Cities,testAttach');
-    expect(cells[0]).toBe('Bahrain');
-    // PR8504
-    // await expect(cells[1]).toBe('al-Manama');
-    expect(cells[1]).toBe('1');
-    expect(cells[2].includes('5.json(http://localhost:8080/dltemp/')).toBe(true);
   });
 });

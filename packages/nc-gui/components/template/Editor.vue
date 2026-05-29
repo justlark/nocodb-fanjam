@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
-import type { ColumnType, OracleUi, TableType } from 'nocodb-sdk'
+import type { ColumnType, LinkToAnotherRecordType, OracleUi, TableType } from 'nocodb-sdk'
 import {
   PermissionEntity,
   PermissionKey,
+  RelationTypes,
   SqlUiFactory,
   UITypes,
   getDateFormat,
   getDateTimeFormat,
+  isLinksOrLTAR,
   isSystemColumn,
   isVirtualCol,
   parseStringDate,
@@ -43,18 +45,94 @@ dayjs.extend(utc)
 
 const { t } = useI18n()
 
-const { getMeta } = useMetas()
+const { getMeta, metas } = useMetas()
 
 const { isAllowed } = usePermissions()
 
 const meta = inject(MetaInj, ref())
 
+interface LinkImportInfo {
+  kind: 'single' | 'multi'
+  relatedModelId: string
+  displayCol: ColumnType
+  relatedTableTitle: string
+}
+
+const LINK_IMPORT_TYPES = [
+  RelationTypes.BELONGS_TO,
+  RelationTypes.ONE_TO_ONE,
+  RelationTypes.HAS_MANY,
+  RelationTypes.MANY_TO_MANY,
+] as const
+
+function linkInfoForColumn(col: ColumnType): LinkImportInfo | null {
+  if (!isLinksOrLTAR(col)) return null
+  const o = col.colOptions as LinkToAnotherRecordType | undefined
+  const type = o?.type
+  if (!type || !LINK_IMPORT_TYPES.includes(type as (typeof LINK_IMPORT_TYPES)[number])) return null
+  const relatedModelId = o?.fk_related_model_id as string | undefined
+  if (!relatedModelId) return null
+  const relMeta = metas.value?.[relatedModelId] as TableType | undefined
+  if (!relMeta?.columns?.length) return null
+  const displayCol = relMeta.columns.find((c) => c.pv)
+  if (!displayCol) return null
+  // The display value column must be the ONLY required column on the related
+  // table — otherwise we wouldn't be able to create a right-side row with just
+  // the display value when an import value is unmatched.
+  const blockingRequired = relMeta.columns.find((c) => {
+    if (c.id === displayCol.id) return false
+    if (isSystemColumn(c)) return false
+    if (isVirtualCol(c)) return false
+    const isAutoPk = c.pk && (c.ai || (c as any).meta?.ag)
+    if (isAutoPk) return false
+    return c.rqd && !c.cdf
+  })
+  if (blockingRequired) return null
+  const kind: LinkImportInfo['kind'] =
+    type === RelationTypes.BELONGS_TO || type === RelationTypes.ONE_TO_ONE ? 'single' : 'multi'
+  return {
+    kind,
+    relatedModelId,
+    displayCol,
+    relatedTableTitle: (relMeta.title || relMeta.table_name || '') as string,
+  }
+}
+
+const relatedMetaIds = computed(() => {
+  const ids = new Set<string>()
+  for (const col of meta.value?.columns ?? []) {
+    if (!isLinksOrLTAR(col)) continue
+    const o = col.colOptions as LinkToAnotherRecordType | undefined
+    if (o?.fk_related_model_id) ids.add(o.fk_related_model_id as string)
+  }
+  return [...ids]
+})
+
+// Lazily load metas for related tables so linkInfoForColumn() can decide
+// whether each Link column is eligible for import mapping. The map is read
+// reactively via `metas`, so the `columns` computed re-evaluates as entries
+// arrive.
+watch(
+  relatedMetaIds,
+  (ids) => {
+    for (const id of ids) {
+      if (!metas.value?.[id]) {
+        // fire-and-forget; getMeta dedupes concurrent callers.
+        getMeta(id).catch(() => {})
+      }
+    }
+  },
+  { immediate: true },
+)
+
 const filterForDestinationColumn = (col: ColumnType): boolean => {
   if ([UITypes.ForeignKey, UITypes.ID].includes(col.uidt as UITypes)) {
     return true
-  } else {
-    return !isSystemColumn(col) && !isVirtualCol(col) && !isAttachment(col)
   }
+  if (linkInfoForColumn(col)) {
+    return true
+  }
+  return !isSystemColumn(col) && !isVirtualCol(col) && !isAttachment(col)
 }
 
 const columns = computed(() =>
@@ -70,6 +148,7 @@ const columns = computed(() =>
       return {
         ...col,
         readonly: isReadonlyCol || !isEditAllowed,
+        linkInfo: linkInfoForColumn(col),
         permissions: {
           isEditAllowed,
           tooltip: isReadonlyCol
@@ -379,6 +458,12 @@ function isSelect(col: ColumnType) {
   return col.uidt === 'MultiSelect' || col.uidt === 'SingleSelect'
 }
 
+function getDestLinkInfo(record: Record<string, any>): LinkImportInfo | null {
+  if (!record?.destCn) return null
+  const col = columns.value?.find((c: Record<string, any>) => c.title === record.destCn) as Record<string, any> | undefined
+  return (col?.linkInfo as LinkImportInfo | undefined) ?? null
+}
+
 function _deleteTable(tableIdx: number) {
   data.tables.splice(tableIdx, 1)
 }
@@ -484,6 +569,19 @@ function fieldsValidation(record: Record<string, any>, tn: string) {
 
   const v = columns.value.find((c) => c.title === record.destCn) as Record<string, any>
 
+  // Link columns are filled via the right-table-lookup pipeline in importTemplate,
+  // so the per-column type/required validations below don't apply.
+  if (v?.linkInfo) {
+    if (v.linkInfo.kind === 'multi') {
+      const delim = typeof record.linkDelimiter === 'string' ? record.linkDelimiter : ''
+      if (delim.length === 0) {
+        message.error(t('msg.error.delimiterRequired'))
+        return false
+      }
+    }
+    return true
+  }
+
   for (const tableName of Object.keys(importData)) {
     // check if the input contains null value for a required column
     if (v.pk ? !v.ai && !v.cdf : !v.cdf && v.rqd) {
@@ -548,6 +646,279 @@ function updateImportTips(baseName: string, tableName: string, progress: number,
   importingTableTips.value[tableName] = parseInt(`${(progress / total) * 100}`)
 }
 
+async function runConcurrent<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
+  if (!items.length) return
+  let i = 0
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const idx = i++
+      if (idx >= items.length) return
+      await fn(items[idx])
+    }
+  })
+  await Promise.all(workers)
+}
+
+function transformCsvValue(input: any, destCol: Record<string, any>) {
+  if (destCol.uidt === UITypes.Checkbox) {
+    if (typeof input === 'string') {
+      input = input ? input.replace(/["']/g, '').toLowerCase().trim() : 'false'
+    }
+    input = input ?? 'false'
+    if (input === 'false' || input === 'no' || input === 'n') {
+      input = '0'
+    } else if (input === 'true' || input === 'yes' || input === 'y') {
+      input = '1'
+    }
+  } else if (destCol.uidt === UITypes.Number) {
+    if (input === '') input = null
+  } else if (destCol.uidt === UITypes.SingleSelect || destCol.uidt === UITypes.MultiSelect) {
+    if (input === '') input = null
+  } else if (destCol.uidt === UITypes.Date) {
+    if (input) input = parseStringDate(input, destCol.meta?.date_format)
+  }
+  return input
+}
+
+function extractLinkPieces(raw: any, delimiter: string | null): string[] {
+  if (raw == null) return []
+  if (delimiter) {
+    return String(raw)
+      .split(delimiter)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+  }
+  const v = String(raw).trim()
+  return v.length ? [v] : []
+}
+
+function extractRowPk(row: Record<string, any> | undefined, pkCol: ColumnType | undefined): any {
+  if (!row || !pkCol) return undefined
+  if (pkCol.title && row[pkCol.title] != null) return row[pkCol.title]
+  if (pkCol.column_name && row[pkCol.column_name] != null) return row[pkCol.column_name]
+  return undefined
+}
+
+async function importOneTableData({
+  srcTableName,
+  tableId,
+  baseId,
+}: {
+  srcTableName: string
+  tableId: string
+  baseId: string
+}) {
+  const tableMapping = srcDestMapping.value[srcTableName] || []
+  const enabledMappings = tableMapping.filter((m: Record<string, any>) => m.enabled && m.destCn)
+
+  // Partition mappings into link vs regular and stash linkInfo + the resolved
+  // destination column for later phases.
+  const linkMappings: Array<{
+    mapping: Record<string, any>
+    destCol: Record<string, any>
+    linkInfo: LinkImportInfo
+  }> = []
+  const regularMappings: Array<{ mapping: Record<string, any>; destCol: Record<string, any> }> = []
+
+  for (const mapping of enabledMappings) {
+    const destCol = columns.value?.find((c: any) => c.title === mapping.destCn) as Record<string, any> | undefined
+    if (!destCol) continue
+    if (destCol.linkInfo) {
+      // Re-check eligibility at import time against the live meta — the user may
+      // have added a required column to the related table in another tab between
+      // mapping and clicking Import.
+      const rawCol = meta.value?.columns?.find((c) => c.id === destCol.id)
+      const freshInfo = rawCol ? linkInfoForColumn(rawCol) : null
+      if (!freshInfo) {
+        throw new Error(
+          t('msg.error.linkRightTableRequiresExtraFields', {
+            field: destCol.title,
+            table: (destCol.linkInfo as LinkImportInfo).relatedTableTitle,
+          }),
+        )
+      }
+      linkMappings.push({ mapping, destCol, linkInfo: freshInfo })
+    } else {
+      regularMappings.push({ mapping, destCol })
+    }
+  }
+
+  const rows: Record<string, any>[] = importData[srcTableName]
+  const total = rows.length
+
+  // Phase A — resolve display value → right-table pk per link column.
+  const linkValueMaps = new WeakMap<Record<string, any>, Map<string, any>>()
+
+  for (const { mapping, linkInfo } of linkMappings) {
+    const delimiter = linkInfo.kind === 'multi'
+      ? (typeof mapping.linkDelimiter === 'string' && mapping.linkDelimiter.length ? mapping.linkDelimiter : ',')
+      : null
+
+    const uniqueValues = new Set<string>()
+    for (const row of rows) {
+      for (const piece of extractLinkPieces(row[mapping.srcCn], delimiter)) uniqueValues.add(piece)
+    }
+
+    const valuePkMap = new Map<string, any>()
+    const relMeta = metas.value?.[linkInfo.relatedModelId] as TableType | undefined
+    const relPkCol = relMeta?.columns?.find((c) => c.pk) as ColumnType | undefined
+    const displayColTitle = linkInfo.displayCol.title!
+
+    // Lookup phase: per-value `eq` queries with bounded concurrency. Skip
+    // values containing characters that the legacy `where` parser treats as
+    // grouping (`(` / `)`); those go straight to the create path and will
+    // pick up de-dup from the unique-values set within this import.
+    const lookupValues: string[] = []
+    for (const v of uniqueValues) {
+      if (!/[()]/.test(v)) lookupValues.push(v)
+    }
+
+    await runConcurrent(lookupValues, 8, async (value) => {
+      try {
+        const res = (await $api.dbDataTableRow.list(linkInfo.relatedModelId, {
+          where: `(${displayColTitle},eq,${value})`,
+          limit: 1,
+        } as any)) as any
+        const found = (res?.list ?? [])[0] as Record<string, any> | undefined
+        const pk = extractRowPk(found, relPkCol)
+        if (pk != null) valuePkMap.set(value, pk)
+      } catch {
+        // Treat lookup failures as "not found"; the create step will handle it.
+      }
+    })
+
+    const missing = [...uniqueValues].filter((v) => !valuePkMap.has(v))
+    if (missing.length) {
+      try {
+        const body = missing.map((v) => ({ [displayColTitle]: v }))
+        const inserted = (await $api.dbDataTableRow.create(linkInfo.relatedModelId, body)) as any
+        const insertedArr: any[] = Array.isArray(inserted) ? inserted : [inserted]
+        for (let i = 0; i < missing.length; i++) {
+          const pk = extractRowPk(insertedArr[i], relPkCol)
+          if (pk != null) valuePkMap.set(missing[i], pk)
+        }
+      } catch (e) {
+        // A race condition (another writer inserted the same display value)
+        // can fail the bulk create. Re-run the lookup for the unresolved
+        // values; anything still missing is a genuine error.
+        await runConcurrent(missing, 8, async (value) => {
+          if (valuePkMap.has(value)) return
+          try {
+            const res = (await $api.dbDataTableRow.list(linkInfo.relatedModelId, {
+              where: `(${displayColTitle},eq,${value})`,
+              limit: 1,
+            } as any)) as any
+            const found = (res?.list ?? [])[0] as Record<string, any> | undefined
+            const pk = extractRowPk(found, relPkCol)
+            if (pk != null) valuePkMap.set(value, pk)
+          } catch {}
+        })
+        const stillMissing = [...uniqueValues].filter((v) => !valuePkMap.has(v))
+        if (stillMissing.length) throw e
+      }
+    }
+
+    linkValueMaps.set(mapping, valuePkMap)
+  }
+
+  // Phase B — insert left rows. When there are link mappings we use the v2
+  // records endpoint so we reliably get back PKs for every inserted row
+  // (the v1 bulk endpoint doesn't return PKs on mysql/sqlite). When there
+  // are none, keep the existing v1 path so the no-link import behaviour
+  // (operation-id audit chaining, etc.) is unchanged.
+  const leftPkCol = meta.value?.columns?.find((c) => c.pk) as ColumnType | undefined
+  const useV2 = linkMappings.length > 0
+  const insertedLeft: Array<{ leftPk: any; sourceRow: Record<string, any> }> = []
+  let operationId: any
+
+  for (let i = 0, progress = 0; i < total; i += maxRowsToParse) {
+    const batchSlice = rows.slice(i, i + maxRowsToParse)
+    const batchData = batchSlice.map((row) =>
+      regularMappings.reduce((acc: Record<string, any>, { mapping, destCol }) => {
+        acc[mapping.destCn] = transformCsvValue(row[mapping.srcCn], destCol)
+        return acc
+      }, {}),
+    )
+
+    if (useV2) {
+      const inserted = (await $api.dbDataTableRow.create(tableId, batchData)) as any
+      const insertedArr: any[] = Array.isArray(inserted) ? inserted : [inserted]
+      for (let j = 0; j < batchSlice.length; j++) {
+        const leftPk = extractRowPk(insertedArr[j], leftPkCol)
+        insertedLeft.push({ leftPk, sourceRow: batchSlice[j] })
+      }
+    } else {
+      const res = await $api.dbTableRow.bulkCreate(
+        'noco',
+        baseId,
+        tableId,
+        batchData,
+        {
+          'wrapped': 'true',
+          'headers[nc-import-type]': quickImportType,
+          'operation_id': operationId,
+          'typecast': isEeUI && autoInsertOption.value ? 'true' : undefined,
+        },
+        {
+          headers: {
+            'xc-auth': $state.token.value as string,
+            'nc-operation-id': operationId,
+            'nc-import-type': quickImportType,
+          },
+        },
+      )
+      operationId = res.headers?.['nc-operation-id']
+    }
+
+    updateImportTips(baseId, tableId, progress, total)
+    progress += batchSlice.length
+    if (autoInsertOption.value) {
+      await getMeta(tableId, true)
+    }
+  }
+
+  if (!linkMappings.length) return
+
+  // Phase C — link left rows to right rows. One nestedLink call per
+  // (leftRow, linkColumn) with the deduplicated child id list.
+  type LinkOp = { leftPk: any; linkColumnId: string; body: any }
+  const linkOps: LinkOp[] = []
+
+  for (const { leftPk, sourceRow } of insertedLeft) {
+    if (leftPk == null) continue
+    for (const { mapping, destCol, linkInfo } of linkMappings) {
+      const delimiter = linkInfo.kind === 'multi'
+        ? (typeof mapping.linkDelimiter === 'string' && mapping.linkDelimiter.length ? mapping.linkDelimiter : ',')
+        : null
+      const pieces = extractLinkPieces(sourceRow[mapping.srcCn], delimiter)
+      if (!pieces.length) continue
+      const valueMap = linkValueMaps.get(mapping)
+      if (!valueMap) continue
+      const childIds = Array.from(
+        new Set(pieces.map((v) => valueMap.get(v)).filter((v) => v != null && v !== '')),
+      )
+      if (!childIds.length) continue
+      linkOps.push({
+        leftPk,
+        linkColumnId: destCol.id as string,
+        // Always send an array — the v2 nestedLink body parser rejects bare
+        // primitives ("Invalid JSON in request body") even though the
+        // controller's TypeScript signature lists `number` as a valid input.
+        body: childIds,
+      })
+    }
+  }
+
+  await runConcurrent(linkOps, 8, async (op) => {
+    await $api.dbDataTableRow.nestedLink(
+      tableId,
+      op.linkColumnId,
+      encodeURIComponent(String(op.leftPk)),
+      op.body,
+    )
+  })
+}
+
 async function importTemplate() {
   if (importDataOnly) {
     for (const table of data.tables) {
@@ -571,71 +942,7 @@ async function importTemplate() {
             if (!table_names.includes(k)) {
               return
             }
-            const data = importData[k]
-            const total = data.length
-            let operationId
-            for (let i = 0, progress = 0; i < total; i += maxRowsToParse) {
-              const batchData = data.slice(i, i + maxRowsToParse).map((row: Record<string, any>) =>
-                srcDestMapping.value[k].reduce((res: Record<string, any>, col: Record<string, any>) => {
-                  if (col.enabled && col.destCn) {
-                    const v = columns.value.find((c: Record<string, any>) => c.title === col.destCn) as Record<string, any>
-                    let input = row[col.srcCn]
-                    // parse potential boolean values
-                    if (v.uidt === UITypes.Checkbox) {
-                      if (typeof input === 'string') {
-                        input = input ? input.replace(/["']/g, '').toLowerCase().trim() : 'false'
-                      }
-                      input = input ?? 'false'
-                      if (input === 'false' || input === 'no' || input === 'n') {
-                        input = '0'
-                      } else if (input === 'true' || input === 'yes' || input === 'y') {
-                        input = '1'
-                      }
-                    } else if (v.uidt === UITypes.Number) {
-                      if (input === '') {
-                        input = null
-                      }
-                    } else if (v.uidt === UITypes.SingleSelect || v.uidt === UITypes.MultiSelect) {
-                      if (input === '') {
-                        input = null
-                      }
-                    } else if (v.uidt === UITypes.Date) {
-                      if (input) {
-                        input = parseStringDate(input, v.meta.date_format)
-                      }
-                    }
-                    res[col.destCn] = input
-                  }
-                  return res
-                }, {}),
-              )
-              const res = await $api.dbTableRow.bulkCreate(
-                'noco',
-                baseId,
-                tableId,
-                batchData,
-                {
-                  'wrapped': 'true',
-                  'headers[nc-import-type]': quickImportType,
-                  'operation_id': operationId,
-                  'typecast': isEeUI && autoInsertOption.value ? 'true' : undefined,
-                },
-                {
-                  headers: {
-                    'xc-auth': $state.token.value as string,
-                    'nc-operation-id': operationId,
-                    'nc-import-type': quickImportType,
-                  },
-                },
-              )
-
-              operationId = res.headers?.['nc-operation-id']
-              updateImportTips(baseId, tableId!, progress, total)
-              progress += batchData.length
-              if (autoInsertOption.value) {
-                await getMeta(tableId, true)
-              }
-            }
+            await importOneTableData({ srcTableName: k, tableId: tableId!, baseId })
           })(key),
         ),
       )
@@ -784,7 +1091,13 @@ function mapDefaultColumns() {
   srcDestMapping.value = {}
   for (let i = 0; i < data.tables.length; i++) {
     for (const col of importColumns[i]) {
-      const o = { srcCn: col.column_name, srcTitle: col.title, destCn: undefined, enabled: true }
+      const o: Record<string, any> = {
+        srcCn: col.column_name,
+        srcTitle: col.title,
+        destCn: undefined,
+        enabled: true,
+        linkDelimiter: ',',
+      }
       if (columns.value) {
         const tableColumn = columns.value.find((c) => !c.readonly && (c.title === col.title || c.column_name === col.column_name))
         if (tableColumn) {
@@ -1057,6 +1370,24 @@ function getErrorByTableName(tableName: string) {
                   />
                 </div>
 
+                <template v-else-if="column.key === 'link_options'">
+                  <template v-if="getDestLinkInfo(record)?.kind === 'multi'">
+                    <NcTooltip
+                      :title="
+                        $t('msg.info.linkImportDelimiter', { table: getDestLinkInfo(record)?.relatedTableTitle ?? '' })
+                      "
+                    >
+                      <a-input
+                        v-model:value="record.linkDelimiter"
+                        size="small"
+                        class="nc-import-link-delimiter !rounded-md"
+                        :placeholder="','"
+                        :maxlength="16"
+                      />
+                    </NcTooltip>
+                  </template>
+                </template>
+
                 <template v-else-if="column.key === 'destination_column'">
                   <a-form-item class="!my-0 w-full">
                     <NcSelect
@@ -1070,6 +1401,7 @@ function getErrorByTableName(tableName: string) {
                       @update:value="
                         (value) => {
                           record.enabled = !!value
+                          if (!record.linkDelimiter) record.linkDelimiter = ','
                         }
                       "
                     >

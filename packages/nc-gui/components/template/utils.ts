@@ -31,4 +31,12 @@ export const srcDestMappingColumns: NcTableColumnProps[] = [
     minWidth: 200,
     padding: '0px 12px 0px 0px',
   },
+  {
+    title: 'Link options',
+    dataIndex: 'link_options',
+    key: 'link_options',
+    minWidth: 110,
+    width: 110,
+    padding: '0px 12px 0px 0px',
+  },
 ]

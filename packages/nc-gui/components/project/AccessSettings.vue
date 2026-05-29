@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { MetaType, PlanLimitExceededDetailsType, Roles, WorkspaceUserRoles } from 'nocodb-sdk'
 import { OrderedProjectRoles, OrgUserRoles, ProjectRoles, WorkspaceRolesToProjectRoles } from 'nocodb-sdk'
+import { VISIBLE_PROJECT_ROLES, isHiddenSystemRole } from '~/helpers/roleVisibility'
 
 const props = defineProps<{
   baseId?: string
@@ -69,11 +70,13 @@ const isLoading = ref(false)
 const accessibleRoles = ref<(typeof ProjectRoles)[keyof typeof ProjectRoles][]>([])
 
 const filteredCollaborators = computed(() =>
-  collaborators.value.filter(
-    (collab) =>
-      collab.display_name?.toLowerCase()?.includes(userSearchText.value.toLowerCase()) ||
-      collab.email.toLowerCase().includes(userSearchText.value.toLowerCase()),
-  ),
+  collaborators.value
+    .filter((collab) => !isHiddenSystemRole(collab.roles) && !isHiddenSystemRole(collab.base_roles))
+    .filter(
+      (collab) =>
+        collab.display_name?.toLowerCase()?.includes(userSearchText.value.toLowerCase()) ||
+        collab.email.toLowerCase().includes(userSearchText.value.toLowerCase()),
+    ),
 )
 
 const sortedCollaborators = computed(() => {
@@ -179,9 +182,9 @@ onMounted(async () => {
       (role) => baseRoles.value && Object.keys(baseRoles.value).includes(role),
     )
     if (isSuper.value) {
-      accessibleRoles.value = OrderedProjectRoles.slice(0)
+      accessibleRoles.value = VISIBLE_PROJECT_ROLES.slice(0)
     } else if (currentRoleIndex !== -1) {
-      accessibleRoles.value = OrderedProjectRoles.slice(currentRoleIndex)
+      accessibleRoles.value = OrderedProjectRoles.slice(currentRoleIndex).filter((r) => VISIBLE_PROJECT_ROLES.includes(r))
     }
     loadSorts()
   } catch (e: any) {
@@ -193,7 +196,7 @@ onMounted(async () => {
 
 watch(baseRoles, (br) => {
   const currentRoleIndex = OrderedProjectRoles.findIndex((role) => br && Object.keys(br).includes(role))
-  accessibleRoles.value = OrderedProjectRoles.slice(currentRoleIndex)
+  accessibleRoles.value = OrderedProjectRoles.slice(currentRoleIndex).filter((r) => VISIBLE_PROJECT_ROLES.includes(r))
 })
 
 const selected = reactive<{

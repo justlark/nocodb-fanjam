@@ -2327,7 +2327,8 @@
       "leaveWithoutFinishing": "Leave without finishing?",
       "leaveWithoutFinishingConfirmation": "Your changes are automatically saved, but you're still in edit mode.",
       "matchedByButtonLabel": "Matched by button label",
-      "matchedByFieldDescription": "Matched by field description"
+      "matchedByFieldDescription": "Matched by field description",
+      "linkImportDelimiter": "Values in this column will be split on this string. Each piece becomes a linked row in {table}."
     },
     "error": {
       "failedToDeleteMcpToken": "Failed to delete MCP token",
@@ -2392,6 +2393,8 @@
       "nullValueViolatesNotNull": "Null value violates not-null constraint",
       "sourceHasInvalidNumbers": "Source data contains some invalid numbers",
       "sourceHasInvalidBoolean": "Source data contains some invalid boolean values",
+      "delimiterRequired": "Delimiter is required for multi-value link columns",
+      "linkRightTableRequiresExtraFields": "Cannot import into Link field \"{field}\": related table \"{table}\" has required fields beyond its display value",
       "invalidForm": "Invalid Form",
       "formValidationFailed": "Form validation failed",
       "youHaveBeenSignedOut": "You have been signed out",

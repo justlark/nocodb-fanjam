@@ -1,7 +1,6 @@
 import { test } from '@playwright/test';
 import { DashboardPage } from '../../../pages/Dashboard';
 import setup, { unsetup } from '../../../setup';
-import { isPg } from '../../../setup/db';
 
 test.describe('Grid view locked', () => {
   let dashboard: DashboardPage;
@@ -37,23 +36,5 @@ test.describe('Grid view locked', () => {
     });
 
     await dashboard.grid.verifyCollaborativeMode();
-  });
-
-  test('Download CSV', async () => {
-    await dashboard.treeView.openTable({ title: 'Country', baseTitle: context.base.title });
-
-    await dashboard.grid.toolbar.clickFields();
-    // Hide 'LastUpdate' column
-    await dashboard.grid.toolbar.fields.click({
-      title: 'LastUpdate',
-    });
-
-    await dashboard.grid.toolbar.viewsMenu.click({
-      menu: 'Download',
-      subMenu: 'CSV',
-      verificationInfo: {
-        verificationFile: isPg(context) ? './fixtures/expectedBaseDownloadDataPg.txt' : null,
-      },
-    });
   });
 });

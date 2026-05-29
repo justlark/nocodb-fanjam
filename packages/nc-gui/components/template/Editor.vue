@@ -901,7 +901,10 @@ async function importOneTableData({
       linkOps.push({
         leftPk,
         linkColumnId: destCol.id as string,
-        body: childIds.length === 1 ? childIds[0] : childIds,
+        // Always send an array — the v2 nestedLink body parser rejects bare
+        // primitives ("Invalid JSON in request body") even though the
+        // controller's TypeScript signature lists `number` as a valid input.
+        body: childIds,
       })
     }
   }

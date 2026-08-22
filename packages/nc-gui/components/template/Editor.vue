@@ -214,6 +214,8 @@ const importingTips = ref<Record<string, string>>({})
 
 const importingTableTips = ref<Record<string, number>>({})
 
+const importingPhase = ref<Record<string, string>>({})
+
 const formError = ref()
 
 const srcDestMapping = ref<Record<string, Record<string, any>[]>>({})
@@ -643,10 +645,10 @@ function fieldsValidation(record: Record<string, any>, tn: string) {
 
 function updateImportTips(baseName: string, tableName: string, progress: number, total: number) {
   importingTips.value[`${baseName}-${tableName}`] = `Importing data to ${baseName} - ${tableName}: ${progress}/${total} records`
-  importingTableTips.value[tableName] = parseInt(`${(progress / total) * 100}`)
+  importingTableTips.value[tableName] = total > 0 ? Math.min(100, Math.max(0, Math.floor((progress / total) * 100))) : 0
 }
 
-async function runConcurrent<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
+async function runConcurrent<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>, onItemDone?: () => void) {
   if (!items.length) return
   let i = 0
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
@@ -654,6 +656,7 @@ async function runConcurrent<T>(items: T[], concurrency: number, fn: (item: T) =
       const idx = i++
       if (idx >= items.length) return
       await fn(items[idx])
+      onItemDone?.()
     }
   })
   await Promise.all(workers)
@@ -697,6 +700,38 @@ function extractRowPk(row: Record<string, any> | undefined, pkCol: ColumnType | 
   if (pkCol.title && row[pkCol.title] != null) return row[pkCol.title]
   if (pkCol.column_name && row[pkCol.column_name] != null) return row[pkCol.column_name]
   return undefined
+}
+
+// Rough per-request cost weights, used only to size the progress bar. They
+// need to be right relative to each other, not in absolute terms: a nestedLink
+// call is several statements plus audit writes, a lookup page is one select.
+const W_LOOKUP_PAGE = 2
+const W_LOOKUP_VALUE = 1
+const W_CREATE_MISSING = 3
+const W_INSERT_ROW = 0.5
+const W_LINK_OP = 2
+
+// Beyond this many rows in the related table we stop trying to pull its whole
+// display-value -> pk map down and fall back to one lookup per unique value.
+const LINK_MAP_PREFETCH_LIMIT = 10000
+const LINK_MAP_PAGE_SIZE = 1000
+
+const LOOKUP_CONCURRENCY = 8
+const LINK_CONCURRENCY = 16
+
+const PHASE_LINKS = 'Resolving links…'
+const PHASE_RECORDS = 'Inserting records…'
+const PHASE_LINKING = 'Linking records…'
+
+// Keys a display value can be matched under. The raw trimmed string first, plus
+// a numeric key so that "3.0" in the file still matches a `3` in the table —
+// the server-side `eq` we used to lean on did that coercion for us.
+function linkValueKeys(raw: any): string[] {
+  if (raw == null) return []
+  const s = String(raw).trim()
+  if (!s.length) return []
+  const n = Number(s)
+  return Number.isFinite(n) ? [s, `#num:${n}`] : [s]
 }
 
 async function importOneTableData({
@@ -746,46 +781,172 @@ async function importOneTableData({
   const rows: Record<string, any>[] = importData[srcTableName]
   const total = rows.length
 
+  // Precompute — split every link cell up front. This is pure CPU work, and it
+  // lets us size the whole job (lookups + inserts + link calls) before issuing a
+  // single request, so the progress bar never has to move backwards.
+  const linkPlans: Array<{
+    mapping: Record<string, any>
+    destCol: Record<string, any>
+    linkInfo: LinkImportInfo
+    uniqueValues: Set<string>
+    rowPieces: string[][]
+  }> = []
+  let estimatedLinkOps = 0
+
+  for (const { mapping, destCol, linkInfo } of linkMappings) {
+    const delimiter =
+      linkInfo.kind === 'multi'
+        ? typeof mapping.linkDelimiter === 'string' && mapping.linkDelimiter.length
+          ? mapping.linkDelimiter
+          : ','
+        : null
+
+    const uniqueValues = new Set<string>()
+    const rowPieces: string[][] = []
+    for (const row of rows) {
+      const pieces = extractLinkPieces(row[mapping.srcCn], delimiter)
+      rowPieces.push(pieces)
+      if (pieces.length) estimatedLinkOps++
+      for (const piece of pieces) uniqueValues.add(piece)
+    }
+
+    linkPlans.push({ mapping, destCol, linkInfo, uniqueValues, rowPieces })
+  }
+
+  // Decide per related table whether we can pull its display-value map down in a
+  // handful of paged reads instead of one `eq` query per unique value. Done
+  // before the weight budget so the budget is exact.
+  const prefetchPages = new Map<string, number>()
+  await Promise.all(
+    [...new Set(linkPlans.map((p) => p.linkInfo.relatedModelId))].map(async (relatedModelId) => {
+      try {
+        const res = (await $api.dbDataTableRow.count(relatedModelId)) as any
+        const count = Number(res?.count)
+        if (Number.isFinite(count) && count <= LINK_MAP_PREFETCH_LIMIT) {
+          prefetchPages.set(relatedModelId, Math.max(1, Math.ceil(count / LINK_MAP_PAGE_SIZE)))
+        }
+      } catch {
+        // Leave it out of the map and fall back to per-value lookups.
+      }
+    }),
+  )
+
+  let totalWeight = 0
+  for (const plan of linkPlans) {
+    const pages = prefetchPages.get(plan.linkInfo.relatedModelId)
+    totalWeight +=
+      pages != null ? pages * W_LOOKUP_PAGE : [...plan.uniqueValues].filter((v) => !/[()]/.test(v)).length * W_LOOKUP_VALUE
+    // Assume the "create the unmatched values" request is needed; if it turns
+    // out not to be we credit it anyway so the bar keeps moving.
+    totalWeight += W_CREATE_MISSING
+  }
+  totalWeight += total * W_INSERT_ROW
+  totalWeight += estimatedLinkOps * W_LINK_OP
+  if (totalWeight <= 0) totalWeight = 1
+
+  let doneWeight = 0
+  const report = (weight = 0, phase?: string) => {
+    doneWeight = Math.min(doneWeight + weight, totalWeight)
+    if (phase) importingPhase.value[srcTableName] = phase
+    updateImportTips(baseId, srcTableName, doneWeight, totalWeight)
+  }
+
+  report(0, linkPlans.length ? PHASE_LINKS : PHASE_RECORDS)
+
   // Phase A — resolve display value → right-table pk per link column.
   const linkValueMaps = new WeakMap<Record<string, any>, Map<string, any>>()
 
-  for (const { mapping, linkInfo } of linkMappings) {
-    const delimiter = linkInfo.kind === 'multi'
-      ? (typeof mapping.linkDelimiter === 'string' && mapping.linkDelimiter.length ? mapping.linkDelimiter : ',')
-      : null
-
-    const uniqueValues = new Set<string>()
-    for (const row of rows) {
-      for (const piece of extractLinkPieces(row[mapping.srcCn], delimiter)) uniqueValues.add(piece)
-    }
+  for (const plan of linkPlans) {
+    const { mapping, linkInfo, uniqueValues } = plan
 
     const valuePkMap = new Map<string, any>()
     const relMeta = metas.value?.[linkInfo.relatedModelId] as TableType | undefined
     const relPkCol = relMeta?.columns?.find((c) => c.pk) as ColumnType | undefined
     const displayColTitle = linkInfo.displayCol.title!
 
-    // Lookup phase: per-value `eq` queries with bounded concurrency. Skip
-    // values containing characters that the legacy `where` parser treats as
-    // grouping (`(` / `)`); those go straight to the create path and will
-    // pick up de-dup from the unique-values set within this import.
-    const lookupValues: string[] = []
-    for (const v of uniqueValues) {
-      if (!/[()]/.test(v)) lookupValues.push(v)
-    }
+    // Per-value `eq` queries with bounded concurrency. Values containing
+    // characters the legacy `where` parser treats as grouping (`(` / `)`) are
+    // skipped; those fall through to the create path and pick up de-dup from
+    // the unique-values set within this import.
+    const lookupByValue = async (values: string[], onItemDone?: () => void) =>
+      runConcurrent(
+        values.filter((v) => !valuePkMap.has(v) && !/[()]/.test(v)),
+        LOOKUP_CONCURRENCY,
+        async (value) => {
+          try {
+            const res = (await $api.dbDataTableRow.list(linkInfo.relatedModelId, {
+              where: `(${displayColTitle},eq,${value})`,
+              limit: 1,
+            } as any)) as any
+            const found = (res?.list ?? [])[0] as Record<string, any> | undefined
+            const pk = extractRowPk(found, relPkCol)
+            if (pk != null) valuePkMap.set(value, pk)
+          } catch {
+            // Treat lookup failures as "not found"; the create step will handle it.
+          }
+        },
+        onItemDone,
+      )
 
-    await runConcurrent(lookupValues, 8, async (value) => {
-      try {
+    const pages = prefetchPages.get(linkInfo.relatedModelId)
+
+    if (pages != null && relPkCol?.title) {
+      // Pull the display value → pk map down in `pages` reads rather than one
+      // read per unique value, and match client side. That also sidesteps the
+      // legacy `where` parser, which cannot express values containing `(`, `)`
+      // or the delimiter `,`.
+      const wanted = new Set<string>()
+      for (const v of uniqueValues) for (const key of linkValueKeys(v)) wanted.add(key)
+
+      const seen = new Map<string, any>()
+      let offset = 0
+      let sawLastPage = false
+
+      for (let page = 0; page < pages; page++) {
         const res = (await $api.dbDataTableRow.list(linkInfo.relatedModelId, {
-          where: `(${displayColTitle},eq,${value})`,
-          limit: 1,
+          fields: [displayColTitle, relPkCol.title],
+          limit: LINK_MAP_PAGE_SIZE,
+          offset,
         } as any)) as any
-        const found = (res?.list ?? [])[0] as Record<string, any> | undefined
-        const pk = extractRowPk(found, relPkCol)
-        if (pk != null) valuePkMap.set(value, pk)
-      } catch {
-        // Treat lookup failures as "not found"; the create step will handle it.
+
+        for (const found of (res?.list ?? []) as Record<string, any>[]) {
+          const keys = linkValueKeys(found?.[displayColTitle])
+          if (!keys.some((key) => wanted.has(key) && !seen.has(key))) continue
+          const pk = extractRowPk(found, relPkCol)
+          if (pk == null) continue
+          // First row wins for a duplicated display value, matching the
+          // `limit: 1` behaviour of the per-value lookup.
+          for (const key of keys) if (!seen.has(key)) seen.set(key, pk)
+        }
+
+        report(W_LOOKUP_PAGE)
+        offset += LINK_MAP_PAGE_SIZE
+
+        if (res?.pageInfo?.isLastPage) {
+          sawLastPage = true
+          // Credit the pages the row count made us budget for but we did not need.
+          report((pages - page - 1) * W_LOOKUP_PAGE)
+          break
+        }
       }
-    })
+
+      for (const v of uniqueValues) {
+        for (const key of linkValueKeys(v)) {
+          const pk = seen.get(key)
+          if (pk != null) {
+            valuePkMap.set(v, pk)
+            break
+          }
+        }
+      }
+
+      // The row count is taken a moment before the reads, so a concurrent writer
+      // can push rows past the last page we budgeted for. Rather than create
+      // duplicates for anything we missed, look those few values up directly.
+      if (!sawLastPage) await lookupByValue([...uniqueValues])
+    } else {
+      await lookupByValue([...uniqueValues], () => report(W_LOOKUP_VALUE))
+    }
 
     const missing = [...uniqueValues].filter((v) => !valuePkMap.has(v))
     if (missing.length) {
@@ -801,22 +962,12 @@ async function importOneTableData({
         // A race condition (another writer inserted the same display value)
         // can fail the bulk create. Re-run the lookup for the unresolved
         // values; anything still missing is a genuine error.
-        await runConcurrent(missing, 8, async (value) => {
-          if (valuePkMap.has(value)) return
-          try {
-            const res = (await $api.dbDataTableRow.list(linkInfo.relatedModelId, {
-              where: `(${displayColTitle},eq,${value})`,
-              limit: 1,
-            } as any)) as any
-            const found = (res?.list ?? [])[0] as Record<string, any> | undefined
-            const pk = extractRowPk(found, relPkCol)
-            if (pk != null) valuePkMap.set(value, pk)
-          } catch {}
-        })
+        await lookupByValue(missing)
         const stillMissing = [...uniqueValues].filter((v) => !valuePkMap.has(v))
         if (stillMissing.length) throw e
       }
     }
+    report(W_CREATE_MISSING)
 
     linkValueMaps.set(mapping, valuePkMap)
   }
@@ -827,11 +978,13 @@ async function importOneTableData({
   // are none, keep the existing v1 path so the no-link import behaviour
   // (operation-id audit chaining, etc.) is unchanged.
   const leftPkCol = meta.value?.columns?.find((c) => c.pk) as ColumnType | undefined
-  const useV2 = linkMappings.length > 0
-  const insertedLeft: Array<{ leftPk: any; sourceRow: Record<string, any> }> = []
+  const useV2 = linkPlans.length > 0
+  const insertedLeft: Array<{ leftPk: any; rowIdx: number }> = []
   let operationId: any
 
-  for (let i = 0, progress = 0; i < total; i += maxRowsToParse) {
+  report(0, PHASE_RECORDS)
+
+  for (let i = 0; i < total; i += maxRowsToParse) {
     const batchSlice = rows.slice(i, i + maxRowsToParse)
     const batchData = batchSlice.map((row) =>
       regularMappings.reduce((acc: Record<string, any>, { mapping, destCol }) => {
@@ -845,7 +998,7 @@ async function importOneTableData({
       const insertedArr: any[] = Array.isArray(inserted) ? inserted : [inserted]
       for (let j = 0; j < batchSlice.length; j++) {
         const leftPk = extractRowPk(insertedArr[j], leftPkCol)
-        insertedLeft.push({ leftPk, sourceRow: batchSlice[j] })
+        insertedLeft.push({ leftPk, rowIdx: i + j })
       }
     } else {
       const res = await $api.dbTableRow.bulkCreate(
@@ -870,37 +1023,34 @@ async function importOneTableData({
       operationId = res.headers?.['nc-operation-id']
     }
 
-    updateImportTips(baseId, tableId, progress, total)
-    progress += batchSlice.length
+    report(batchSlice.length * W_INSERT_ROW)
     if (autoInsertOption.value) {
       await getMeta(tableId, true)
     }
   }
 
-  if (!linkMappings.length) return
+  if (!linkPlans.length) {
+    report(totalWeight)
+    return
+  }
 
   // Phase C — link left rows to right rows. One nestedLink call per
   // (leftRow, linkColumn) with the deduplicated child id list.
   type LinkOp = { leftPk: any; linkColumnId: string; body: any }
   const linkOps: LinkOp[] = []
 
-  for (const { leftPk, sourceRow } of insertedLeft) {
+  for (const { leftPk, rowIdx } of insertedLeft) {
     if (leftPk == null) continue
-    for (const { mapping, destCol, linkInfo } of linkMappings) {
-      const delimiter = linkInfo.kind === 'multi'
-        ? (typeof mapping.linkDelimiter === 'string' && mapping.linkDelimiter.length ? mapping.linkDelimiter : ',')
-        : null
-      const pieces = extractLinkPieces(sourceRow[mapping.srcCn], delimiter)
-      if (!pieces.length) continue
-      const valueMap = linkValueMaps.get(mapping)
+    for (const plan of linkPlans) {
+      const pieces = plan.rowPieces[rowIdx]
+      if (!pieces?.length) continue
+      const valueMap = linkValueMaps.get(plan.mapping)
       if (!valueMap) continue
-      const childIds = Array.from(
-        new Set(pieces.map((v) => valueMap.get(v)).filter((v) => v != null && v !== '')),
-      )
+      const childIds = Array.from(new Set(pieces.map((v) => valueMap.get(v)).filter((v) => v != null && v !== '')))
       if (!childIds.length) continue
       linkOps.push({
         leftPk,
-        linkColumnId: destCol.id as string,
+        linkColumnId: plan.destCol.id as string,
         // Always send an array — the v2 nestedLink body parser rejects bare
         // primitives ("Invalid JSON in request body") even though the
         // controller's TypeScript signature lists `number` as a valid input.
@@ -909,14 +1059,20 @@ async function importOneTableData({
     }
   }
 
-  await runConcurrent(linkOps, 8, async (op) => {
-    await $api.dbDataTableRow.nestedLink(
-      tableId,
-      op.linkColumnId,
-      encodeURIComponent(String(op.leftPk)),
-      op.body,
-    )
-  })
+  report(0, PHASE_LINKING)
+
+  await runConcurrent(
+    linkOps,
+    LINK_CONCURRENCY,
+    async (op) => {
+      await $api.dbDataTableRow.nestedLink(tableId, op.linkColumnId, encodeURIComponent(String(op.leftPk)), op.body)
+    },
+    () => report(W_LINK_OP),
+  )
+
+  // Estimated link ops are an upper bound (rows whose values all resolved to
+  // nothing are dropped), so settle the bar on 100%.
+  report(totalWeight)
 }
 
 async function importTemplate() {
@@ -929,6 +1085,9 @@ async function importTemplate() {
 
     try {
       isImporting.value = true
+      importingTips.value = {}
+      importingTableTips.value = {}
+      importingPhase.value = {}
       // collapse table
       expansionPanel.value = []
 
@@ -968,6 +1127,9 @@ async function importTemplate() {
 
     try {
       isImporting.value = true
+      importingTips.value = {}
+      importingTableTips.value = {}
+      importingPhase.value = {}
       // collapse table
       expansionPanel.value = []
       // tab info to be used to show the tab after successful import
@@ -1292,14 +1454,19 @@ function getErrorByTableName(tableName: string) {
                   <GeneralIcon icon="ncInfo" class="text-nc-content-red-dark" />
                 </NcBadge>
               </NcTooltip>
-              <div v-if="isImporting" class="w-[150px]">
-                <a-progress
-                  :percent="importingTableTips[meta!.id!] ?? 0"
-                  size="small"
-                  status="normal"
-                  stroke-color="#3366FF"
-                  trail-color="#F0F3FF"
-                />
+              <div v-if="isImporting" class="flex items-center gap-2">
+                <span class="text-xs text-nc-content-gray-subtle whitespace-nowrap">
+                  {{ importingPhase[table.table_name] ?? '' }}
+                </span>
+                <div class="w-[150px]">
+                  <a-progress
+                    :percent="importingTableTips[table.table_name] ?? 0"
+                    size="small"
+                    status="normal"
+                    stroke-color="#3366FF"
+                    trail-color="#F0F3FF"
+                  />
+                </div>
               </div>
             </div>
           </template>

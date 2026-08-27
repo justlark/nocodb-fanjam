@@ -16,7 +16,11 @@ const buttonSize = 24
  * Returns undefined when no preview was fetched, in which case the cell falls back to
  * showing the count.
  */
-const getLinkPreview = (record: Record<string, any> | undefined, column?: ColumnType): Record<string, any>[] | undefined => {
+const getLinkPreview = (
+  record: Record<string, any> | undefined,
+  column?: ColumnType,
+  count = 0,
+): Record<string, any>[] | undefined => {
   if (!column?.title) return undefined
 
   const preview = record?.[getLinkPreviewKey(column.title)]
@@ -24,8 +28,17 @@ const getLinkPreview = (record: Record<string, any> | undefined, column?: Column
   if (ncIsArray(preview)) return preview
 
   // The reverse side of a one-to-one resolves to a single record
-  return ncIsObject(preview) ? [preview] : undefined
+  if (ncIsObject(preview)) return [preview]
+
+  // A row inserted in this session carries no preview key, since it is built from the
+  // create response rather than a list request. With nothing linked there is nothing
+  // to preview anyway, so treat it as empty rather than falling back to the count -
+  // otherwise a new row reads "No records linked" until the next reload.
+  return count ? undefined : []
 }
+
+/** The cell's own value for a Links column is the number of linked records. */
+const linkCount = (row: Row, column: CanvasGridColumn) => +row?.row?.[column.title!] || 0
 
 export const LinksCellRenderer: CellRenderer = {
   render: (ctx, props) => {
@@ -47,15 +60,18 @@ export const LinksCellRenderer: CellRenderer = {
       relatedTableMeta,
     } = props
 
-    const preview = getLinkPreview(row, column)
+    const preview = getLinkPreview(row, column, +value || 0)
     const displayColumn = getLtarDisplayColumn(relatedTableMeta)
 
     // Render the linked values as chips when we have them. Under a Lookup the cell is
     // drawn as a single chip in someone else's layout, where only the count fits.
     if (preview && displayColumn && !props.tag?.renderAsTag && !props.isUnderLookup) {
+      const cells = toLtarChipCells(preview, displayColumn)
+
       renderLtarChips(ctx, props, {
         displayColumn,
-        cells: toLtarChipCells(preview, displayColumn),
+        cells,
+        hasMore: cells.length < (+value || 0),
       })
 
       if (isBoxHovered({ x, y, width, height }, mousePosition)) {
@@ -164,7 +180,8 @@ export const LinksCellRenderer: CellRenderer = {
     const { x, y, width, height } = getCellPosition(column, rowIndex)
     const padding = 10
 
-    const showsChips = !!getLinkPreview(row?.row, column.columnObj) && !!getLtarDisplayColumn(column.relatedTableMeta)
+    const showsChips =
+      !!getLinkPreview(row?.row, column.columnObj, linkCount(row, column)) && !!getLtarDisplayColumn(column.relatedTableMeta)
 
     if (!showsChips) {
       if (
@@ -221,7 +238,9 @@ export const LinksCellRenderer: CellRenderer = {
   handleHover: async (props) => {
     const { row, column, mousePosition, getCellPosition, t } = props
 
-    if (!getLinkPreview(row?.row, column.columnObj) || !getLtarDisplayColumn(column.relatedTableMeta)) return
+    if (!getLinkPreview(row?.row, column.columnObj, linkCount(row, column)) || !getLtarDisplayColumn(column.relatedTableMeta)) {
+      return
+    }
 
     const { tryShowTooltip, hideTooltip } = useTooltipStore()
     hideTooltip()

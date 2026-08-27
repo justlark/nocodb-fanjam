@@ -5,6 +5,9 @@ import { renderAsCellLookupOrLtarValue } from '../../utils/cell'
 
 const ellipsisWidth = 15
 
+// Breathing room between the last chip and the trailing ellipsis
+const ellipsisGap = 6
+
 type CellClickProps = Parameters<NonNullable<CellRenderer['handleClick']>>[0]
 
 export interface LtarChipCell {
@@ -54,7 +57,16 @@ export const toLtarChipCells = (value: any, displayColumn: ColumnType): LtarChip
 export const renderLtarChips = (
   ctx: CanvasRenderingContext2D,
   props: CellRendererOptions,
-  { displayColumn, cells }: { displayColumn: ColumnType; cells: LtarChipCell[] },
+  {
+    displayColumn,
+    cells,
+    hasMore = false,
+  }: {
+    displayColumn: ColumnType
+    cells: LtarChipCell[]
+    /** More records are linked than were sent for preview, so the chips under-report */
+    hasMore?: boolean
+  },
 ) => {
   const {
     x,
@@ -190,13 +202,18 @@ export const renderLtarChips = (
     count++
   }
 
-  if (flag && count < cells.length) {
+  if ((flag && count < cells.length) || hasMore) {
+    // `currentX` is the last chip's right edge (renderTagLabel's spacing is leading,
+    // not trailing), so draw from there plus a gap rather than right-aligning onto it.
+    // Clamped so a chip that ran to the cell edge cannot push the ellipsis outside.
+    const ellipsisX = Math.min(currentX + ellipsisGap, x + width - padding - ellipsisWidth)
+
     renderSingleLineText(ctx, {
-      x: currentX + 12,
+      x: ellipsisX,
       y,
       text: '...',
       maxWidth: ellipsisWidth,
-      textAlign: 'right',
+      textAlign: 'left',
       verticalAlign: 'middle',
       fontFamily: '500 13px Inter',
       fillStyle: '#666',

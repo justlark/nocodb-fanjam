@@ -65,8 +65,8 @@ loadRelatedTableMeta()
  * it under `_nc_lk_<title>` when the list request opts into a link preview, which lets
  * us show the values rather than just how many there are.
  *
- * Empty whenever no preview was fetched (form view, unsaved row, older cached data),
- * in which case the cell falls back to the count text.
+ * Null whenever no preview is available (form view, unsaved row), in which case the
+ * cell falls back to the count text.
  */
 const linkPreview = computed<Record<string, any>[] | null>(() => {
   if (isForm.value || isNew.value || !relatedTableDisplayValueProp.value) return null
@@ -76,7 +76,13 @@ const linkPreview = computed<Record<string, any>[] | null>(() => {
   if (ncIsArray(preview)) return preview
 
   // The reverse side of a one-to-one resolves to a single record
-  return ncIsObject(preview) ? [preview] : null
+  if (ncIsObject(preview)) return [preview]
+
+  // A row inserted in this session carries no preview key, since it is built from the
+  // create response rather than a list request. With nothing linked there is nothing
+  // to preview anyway, so show an empty cell rather than falling back to the count -
+  // otherwise a new row reads "No records linked" until the next reload.
+  return +value?.value ? null : []
 })
 
 const previewCells = computed<{ value: any; item: Record<string, any> }[]>(() =>
@@ -87,6 +93,33 @@ const previewCells = computed<{ value: any; item: Record<string, any> }[]>(() =>
 
     return acc
   }, [] as { value: any; item: Record<string, any> }[]),
+)
+
+/**
+ * Chips are clipped by the container's overflow, which gives no indication that more
+ * are hidden. The canvas grid paints a trailing ellipsis for this; mirror it here.
+ */
+const chipsContainer = ref<HTMLElement>()
+
+const isChipsClipped = ref(false)
+
+const updateChipsClipped = () => {
+  const el = chipsContainer.value
+  // 1px of slack, since scrollWidth/clientWidth are rounded independently
+  isChipsClipped.value = !!el && el.scrollWidth - el.clientWidth > 1
+}
+
+useResizeObserver(chipsContainer, updateChipsClipped)
+
+watch([previewCells, rowHeight], () => nextTick(updateChipsClipped))
+
+/**
+ * Two ways chips can under-report: the row is too short to fit them all, or there are
+ * more linked records than the API previews per cell. The latter is the only signal
+ * available where the chips wrap freely, such as the expanded record.
+ */
+const showEllipsis = computed(
+  () => !!linkPreview.value && (isChipsClipped.value || previewCells.value.length < (+value?.value || 0)),
 )
 
 const hasEditPermission = computed(() => {
@@ -227,13 +260,24 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="nc-cell-field flex w-full group items-center nc-links-wrapper py-1" @dblclick.stop="openChildList">
+  <!-- `py-1` only applies to the count-text layout. A chip is taller than the text it
+       replaces, so the extra padding would push a row-height-1 cell past its 32px and
+       spill the chips over the bottom border. -->
+  <div
+    class="nc-cell-field flex w-full group items-center nc-links-wrapper"
+    :class="{ 'py-1': !linkPreview }"
+    @dblclick.stop="openChildList"
+  >
     <VirtualCellComponentsLinkRecordDropdown v-model:is-open="isOpen">
-      <div v-if="linkPreview" class="flex items-center gap-1 w-full chips-wrapper min-h-4 relative">
+      <div v-if="linkPreview" class="flex items-center gap-1 w-full chips-wrapper min-h-6.5 relative">
+        <!-- Only constrain the height where a row height is actually in play (grid,
+             gallery, kanban). The expanded record provides none, and should let the
+             chips wrap freely rather than clipping them to one row. -->
         <div
+          ref="chipsContainer"
           class="chips flex items-center flex-1 min-w-0 overflow-x-hidden overflow-y-auto"
           :class="{ 'flex-wrap': rowHeight !== 1 }"
-          :style="{ maxHeight: `${rowHeightInPx[rowHeight ?? 1]}px` }"
+          :style="rowHeight ? { maxHeight: `${rowHeightInPx[rowHeight]}px` } : {}"
         >
           <VirtualCellComponentsItemChip
             v-for="(cell, i) of previewCells"
@@ -244,6 +288,8 @@ onUnmounted(() => {
             :show-unlink-button="false"
           />
         </div>
+
+        <span v-if="showEllipsis" class="nc-links-ellipsis flex-none px-1 text-gray-500 select-none">…</span>
 
         <div
           v-if="!isUnderLookup"

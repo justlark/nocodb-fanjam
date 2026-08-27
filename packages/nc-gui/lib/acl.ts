@@ -104,6 +104,7 @@ const rolePermissions = {
       filterSync: true,
       filterChildrenRead: true,
       viewFieldEdit: true,
+      rowHeightUpdate: true,
       csvTableImport: true,
       excelTableImport: true,
       hookTrigger: true,

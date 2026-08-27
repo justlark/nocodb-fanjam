@@ -3,6 +3,11 @@ import BasePage from '../../Base';
 import { DashboardPage } from '..';
 import { DateTimeCellPageObject } from '../common/Cell/DateTimeCell';
 
+// The "link a record" button. A Links field also renders a maximize button beside it,
+// so `.nc-action-icon` alone is ambiguous - the `nc-plus` pair is what BelongsTo,
+// OneToOne and Links all put on the add button itself.
+const LINK_ADD_BTN = '.nc-action-icon.nc-plus';
+
 export class ExpandedFormPage extends BasePage {
   readonly dashboard: DashboardPage;
   readonly addNewTableButton: Locator;
@@ -121,7 +126,7 @@ export class ExpandedFormPage extends BasePage {
       }
       case 'belongsTo':
         await field.locator('.nc-virtual-cell').hover();
-        await field.locator('.nc-action-icon').click();
+        await field.locator(LINK_ADD_BTN).click();
         if (ltarCount !== undefined && ltarCount !== null) {
           await this.dashboard.linkRecord.verifyCount(`${ltarCount}`);
         }
@@ -130,7 +135,7 @@ export class ExpandedFormPage extends BasePage {
       case 'hasMany':
       case 'manyToMany':
         await field.locator('.nc-virtual-cell').hover();
-        await field.locator('.nc-action-icon').click();
+        await field.locator(LINK_ADD_BTN).click();
         if (ltarCount !== undefined && ltarCount !== null) {
           await this.dashboard.linkRecord.verifyCount(`${ltarCount}`);
         }

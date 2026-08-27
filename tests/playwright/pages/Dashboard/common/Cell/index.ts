@@ -24,6 +24,15 @@ export interface CellProps {
   columnHeader: string;
 }
 
+// Button that opens the linked-record list, on a `Links` cell and on a legacy
+// `LinkToAnotherRecord` has-many/many-to-many cell respectively.
+const LINKS_EXPAND_BTN = '.nc-canvas-links-maximize-icon';
+const HM_EXPAND_BTN = '.nc-has-many-maximize-icon';
+
+// A Links cell renders one chip per linked record, capped at the number of rows the
+// API returns per cell - keep in sync with `defaultLimitConfig.linkPreviewLimit`.
+const LINK_PREVIEW_LIMIT = 10;
+
 export class CellPageObject extends BasePage {
   readonly parent: GridPage | SharedFormPage | SurveyFormPage | GroupPageObject;
   readonly selectOption: SelectOptionCellPageObject;
@@ -103,10 +112,13 @@ export class CellPageObject extends BasePage {
     }
   }
 
+  // Links cells show the linked values as chips rather than a "N Links" label, so the
+  // child list is opened from the maximize button that appears on hover.
   async inCellExpand({ index, columnHeader }: CellProps) {
-    // await this.get({ index, columnHeader }).hover();
+    const cell = this.get({ index, columnHeader });
+    await cell.hover();
     await this.waitForResponse({
-      uiAction: () => this.get({ index, columnHeader }).locator('.nc-datatype-link').click(),
+      uiAction: () => cell.locator(`${LINKS_EXPAND_BTN}, ${HM_EXPAND_BTN}`).first().click(),
       requestUrlPathToMatch: '/api/v1/db/data/noco',
       httpMethodsToMatch: ['GET'],
     });
@@ -307,16 +319,17 @@ export class CellPageObject extends BasePage {
     count,
     value,
     verifyChildList = false,
-    options,
   }: CellProps & {
     count?: number;
     type?: string;
     value?: string[];
     verifyChildList?: boolean;
+    /** Unused since Links cells show chips rather than a "N Links" label. */
     options?: { singular?: string; plural?: string };
   }) {
     const cell = this.get({ index, columnHeader });
-    const linkText = cell.locator('.nc-datatype-link');
+    const chips = cell.locator('.chips > .chip');
+    const expandBtn = cell.locator(`${LINKS_EXPAND_BTN}, ${HM_EXPAND_BTN}`).first();
 
     await cell.scrollIntoViewIfNeeded();
 
@@ -324,7 +337,6 @@ export class CellPageObject extends BasePage {
     await this.rootPage.waitForTimeout(1000);
 
     if (type === 'bt') {
-      const chips = cell.locator('.chips > .chip');
       expect(await chips.count()).toBe(count);
 
       for (let i = 0; i < value.length; ++i) {
@@ -335,20 +347,19 @@ export class CellPageObject extends BasePage {
       return;
     }
 
-    // verify chip count & contents
-    if (count) {
-      const expectedText = `${count} ${count === 1 ? options.singular : options.plural}`;
-      let retryCount = 0;
-      while (retryCount < 5) {
-        const receivedText = await linkText.innerText();
-        if (receivedText.includes(expectedText)) {
-          break;
-        }
-        retryCount++;
-        // add delay of 100ms
-        await this.rootPage.waitForTimeout(100 * retryCount);
-      }
-      expect(await cell.innerText()).toContain(expectedText);
+    // hm / mm cells render a chip per linked record instead of a "N Links" label.
+    // Only the first `LINK_PREVIEW_LIMIT` records are sent, so beyond that the cell
+    // cannot show the full count - `verifyChildList` checks it against the modal.
+    if (count !== undefined) {
+      await expect.poll(() => chips.count()).toBe(Math.min(count, LINK_PREVIEW_LIMIT));
+    }
+
+    // verify chip contents. Compared as a set: the linked records are shown in
+    // whatever order the API returns them, which is not part of the contract here.
+    if (value?.length) {
+      await expect
+        .poll(async () => (await chips.locator('.name').allInnerTexts()).map(t => t.trim()).sort())
+        .toEqual([...value].sort());
     }
 
     if (verifyChildList) {
@@ -356,9 +367,9 @@ export class CellPageObject extends BasePage {
       await this.get({ index, columnHeader }).hover();
 
       // arrow expand doesn't exist for bt columns
-      if (await linkText.count()) {
+      if (await expandBtn.count()) {
         await this.waitForResponse({
-          uiAction: () => linkText.click(),
+          uiAction: () => expandBtn.click(),
           requestUrlPathToMatch: '/api/v1',
           httpMethodsToMatch: ['GET'],
         });
@@ -379,10 +390,12 @@ export class CellPageObject extends BasePage {
 
   async unlinkVirtualCell({ index, columnHeader }: CellProps) {
     const cell = this.get({ index, columnHeader });
-    const isLink = await cell.locator('.nc-datatype-link').count();
+    const expandBtn = cell.locator(`${LINKS_EXPAND_BTN}, ${HM_EXPAND_BTN}`).first();
 
-    // Count will be 0 for BT columns
-    if (!isLink) {
+    // BT columns unlink in place and have no child list to open
+    const hasChildList = await expandBtn.count();
+
+    if (!hasChildList) {
       await cell.click();
       await cell.locator('.nc-icon.unlink-icon').click();
       // await cell.click();
@@ -390,7 +403,8 @@ export class CellPageObject extends BasePage {
 
     // For HM/MM columns
     else {
-      await cell.locator('.nc-datatype-link').click();
+      await cell.hover();
+      await expandBtn.click();
       await this.rootPage.locator('.nc-links-dropdown.active').waitFor({ state: 'visible' });
       await this.rootPage
         .locator(`[data-testid="nc-child-list-item"]`)
@@ -435,9 +449,8 @@ export class CellPageObject extends BasePage {
     // in-cell add
     await expect(vCell.locator('.nc-action-icon.nc-plus:visible')).toHaveCount(isEditAccess ? 1 : 0);
 
-    // virtual cell link text
-    const linkText = await getTextExcludeIconText(vCell);
-    expect(linkText).toContain('1 City');
+    // virtual cell shows the linked record as a chip
+    await expect(vCell.locator('.chips > .chip')).toHaveCount(1);
   }
 
   async copyCellToClipboard({ index, columnHeader }: CellProps, ...clickOptions: Parameters<Locator['click']>) {

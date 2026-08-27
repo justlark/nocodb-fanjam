@@ -82,6 +82,7 @@ export class PublicDatasService {
       query: {},
       view,
       includeRowColorColumns: query.include_row_color === 'true',
+      includeLinkPreview: query.includeLinkPreview === 'true',
     });
 
     const listArgs: any = { ...query, ...dependencyFields };

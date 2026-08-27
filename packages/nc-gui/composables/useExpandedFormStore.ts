@@ -13,6 +13,7 @@ import {
   PermissionKey,
   PlanLimitTypes,
   ViewTypes,
+  getLinkPreviewKey,
   isAIPromptCol,
   isHiddenCol,
   isReadOnlyColumn,
@@ -511,7 +512,9 @@ const [useProvideExpandedFormStore, useExpandedFormStore] = useInjectionState(
           encodeURIComponent(recordId),
           {
             getHiddenColumn: true,
-          },
+            // Keeps Links cells showing chips in the expanded record, same as the grid
+            includeLinkPreview: true,
+          } as any,
         )
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -531,6 +534,14 @@ const [useProvideExpandedFormStore, useExpandedFormStore] = useInjectionState(
             ...(meta.value.columns ?? []).reduce((partialRecord, col) => {
               if (isVirtualCol(col) && col.title && col.title in record) {
                 partialRecord[col.title] = (record as Record<string, any>)[col.title as string]
+
+                // A Links column's preview rows travel under a companion key rather than
+                // the column's own title, so filtering by column title alone would keep
+                // the stale chips while refreshing the count beside them.
+                const previewKey = getLinkPreviewKey(col.title)
+                if (previewKey in record) {
+                  partialRecord[previewKey] = (record as Record<string, any>)[previewKey]
+                }
               }
               return partialRecord
             }, {} as Record<string, any>),

@@ -415,8 +415,15 @@ const [useProvideViewGroupBy, useViewGroupBy] = useInjectionState(
               ...params,
               ...(isUIAllowed('sortSync') ? {} : { sortArrJson: JSON.stringify(sorts.value) }),
               ...(isUIAllowed('filterSync') ? {} : { filterArrJson: JSON.stringify(nestedFilters.value) }),
+              // Rows inside a group are fetched here rather than through useInfiniteData,
+              // so they need the link preview too - otherwise a Links cell falls back to
+              // its count as soon as the view is grouped.
+              includeLinkPreview: true,
             } as any)
-          : await fetchSharedViewData({ sortsArr: sorts.value, filtersArr: nestedFilters.value, ...query }, { isGroupBy: true })
+          : await fetchSharedViewData(
+              { sortsArr: sorts.value, filtersArr: nestedFilters.value, ...query, includeLinkPreview: true },
+              { isGroupBy: true },
+            )
 
         group.count = response.pageInfo.totalRows ?? 0
         group.rows = formatData(response.list)

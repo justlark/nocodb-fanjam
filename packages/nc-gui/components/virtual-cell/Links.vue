@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from '@vue/reactivity'
 import type { ColumnType } from 'nocodb-sdk'
+import { getLinkPreviewKey } from 'nocodb-sdk'
 import type { Ref } from 'vue'
 import { ref } from 'vue'
 import { forcedNextTick } from '../../utils/browserUtils'
@@ -23,6 +24,8 @@ const readOnly = inject(ReadonlyInj, ref(false))
 const isUnderLookup = inject(IsUnderLookupInj, ref(false))
 
 const isExpandedFormOpen = inject(IsExpandedFormOpenInj, ref(false))
+
+const rowHeight = inject(RowHeightInj, ref())
 
 const canvasCellEventData = inject(CanvasCellEventDataInj, reactive<CanvasCellEventDataInjType>({}))
 
@@ -56,6 +59,68 @@ const relatedTableDisplayColumn = computed(
 )
 
 loadRelatedTableMeta()
+
+/**
+ * A Links cell value is only a count. The linked records themselves arrive alongside
+ * it under `_nc_lk_<title>` when the list request opts into a link preview, which lets
+ * us show the values rather than just how many there are.
+ *
+ * Null whenever no preview is available (form view, unsaved row), in which case the
+ * cell falls back to the count text.
+ */
+const linkPreview = computed<Record<string, any>[] | null>(() => {
+  if (isForm.value || isNew.value || !relatedTableDisplayValueProp.value) return null
+
+  const preview = row.value?.row?.[getLinkPreviewKey(colTitle.value)]
+
+  if (ncIsArray(preview)) return preview
+
+  // The reverse side of a one-to-one resolves to a single record
+  if (ncIsObject(preview)) return [preview]
+
+  // A row inserted in this session carries no preview key, since it is built from the
+  // create response rather than a list request. With nothing linked there is nothing
+  // to preview anyway, so show an empty cell rather than falling back to the count -
+  // otherwise a new row reads "No records linked" until the next reload.
+  return +value?.value ? null : []
+})
+
+const previewCells = computed<{ value: any; item: Record<string, any> }[]>(() =>
+  (linkPreview.value ?? []).reduce((acc, item) => {
+    if (!ncIsObject(item)) return acc
+
+    acc.push({ value: item[relatedTableDisplayValueProp.value], item })
+
+    return acc
+  }, [] as { value: any; item: Record<string, any> }[]),
+)
+
+/**
+ * Chips are clipped by the container's overflow, which gives no indication that more
+ * are hidden. The canvas grid paints a trailing ellipsis for this; mirror it here.
+ */
+const chipsContainer = ref<HTMLElement>()
+
+const isChipsClipped = ref(false)
+
+const updateChipsClipped = () => {
+  const el = chipsContainer.value
+  // 1px of slack, since scrollWidth/clientWidth are rounded independently
+  isChipsClipped.value = !!el && el.scrollWidth - el.clientWidth > 1
+}
+
+useResizeObserver(chipsContainer, updateChipsClipped)
+
+watch([previewCells, rowHeight], () => nextTick(updateChipsClipped))
+
+/**
+ * Two ways chips can under-report: the row is too short to fit them all, or there are
+ * more linked records than the API previews per cell. The latter is the only signal
+ * available where the chips wrap freely, such as the expanded record.
+ */
+const showEllipsis = computed(
+  () => !!linkPreview.value && (isChipsClipped.value || previewCells.value.length < (+value?.value || 0)),
+)
 
 const hasEditPermission = computed(() => {
   return (!readOnly.value && isUIAllowed('dataEdit') && !isUnderLookup.value) || isForm.value
@@ -175,7 +240,10 @@ onMounted(() => {
 
       if (getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-icon-plus', clientMousePosition)) {
         openListDlg()
-      } else if (getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-text', clientMousePosition)) {
+      } else if (
+        getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-text', clientMousePosition) ||
+        getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-maximize-icon', clientMousePosition)
+      ) {
         openChildList()
       } else if (hasEditPermission.value) {
         openListDlg()
@@ -192,9 +260,69 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="nc-cell-field flex w-full group items-center nc-links-wrapper py-1" @dblclick.stop="openChildList">
+  <!-- `py-1` only applies to the count-text layout. A chip is taller than the text it
+       replaces, so the extra padding would push a row-height-1 cell past its 32px and
+       spill the chips over the bottom border. -->
+  <div
+    class="nc-cell-field flex w-full group items-center nc-links-wrapper"
+    :class="{ 'py-1': !linkPreview }"
+    @dblclick.stop="openChildList"
+  >
     <VirtualCellComponentsLinkRecordDropdown v-model:is-open="isOpen">
-      <div class="flex w-full group items-center min-h-4">
+      <div v-if="linkPreview" class="flex items-center gap-1 w-full chips-wrapper min-h-6.5 relative">
+        <!-- Only constrain the height where a row height is actually in play (grid,
+             gallery, kanban). The expanded record provides none, and should let the
+             chips wrap freely rather than clipping them to one row. -->
+        <div
+          ref="chipsContainer"
+          class="chips flex items-center flex-1 min-w-0 overflow-x-hidden overflow-y-auto"
+          :class="{ 'flex-wrap': rowHeight !== 1 }"
+          :style="rowHeight ? { maxHeight: `${rowHeightInPx[rowHeight]}px` } : {}"
+        >
+          <VirtualCellComponentsItemChip
+            v-for="(cell, i) of previewCells"
+            :key="i"
+            :item="cell.item"
+            :value="cell.value"
+            :column="relatedTableDisplayColumn"
+            :show-unlink-button="false"
+          />
+        </div>
+
+        <span v-if="showEllipsis" class="nc-links-ellipsis flex-none px-1 text-gray-500 select-none">…</span>
+
+        <div
+          v-if="!isUnderLookup"
+          class="flex justify-end gap-[2px] min-h-4 items-center absolute right-0 top-0 bottom-0 links-actions"
+          :class="{ active: isOpen }"
+          @click.stop
+        >
+          <!-- `nc-action-icon nc-plus` must stay together on the clickable element:
+               that pair is how BelongsTo/OneToOne mark their add button too, and it is
+               the shared selector for in-cell add. -->
+          <NcButton
+            v-if="hasEditPermission"
+            size="xsmall"
+            type="secondary"
+            class="nc-action-icon nc-plus nc-canvas-links-icon-plus"
+            @click.stop="openListDlg"
+          >
+            <GeneralIcon icon="plus" class="text-sm" />
+          </NcButton>
+          <NcTooltip :title="$t('tooltip.expandShiftSpace')" :disabled="isExpandedFormOpen" class="flex">
+            <NcButton
+              size="xsmall"
+              type="secondary"
+              class="nc-action-icon nc-canvas-links-maximize-icon"
+              @click.stop="openChildList"
+            >
+              <GeneralIcon icon="maximize" />
+            </NcButton>
+          </NcTooltip>
+        </div>
+      </div>
+
+      <div v-else class="flex w-full group items-center min-h-4">
         <div class="block flex-shrink truncate">
           <component
             :is="isUnderLookup ? 'span' : 'a'"
@@ -247,3 +375,24 @@ onUnmounted(() => {
     </VirtualCellComponentsLinkRecordDropdown>
   </div>
 </template>
+
+<style scoped>
+.links-actions {
+  @apply hidden;
+}
+
+.links-actions.active,
+.chips-wrapper:hover .links-actions {
+  @apply flex;
+}
+</style>
+
+<style lang="scss">
+.nc-default-value-wrapper,
+.nc-expanded-cell,
+.ant-form-item-control-input {
+  .links-actions {
+    @apply !flex;
+  }
+}
+</style>

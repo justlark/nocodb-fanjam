@@ -300,13 +300,17 @@ const [useProvideKanbanViewStore, useKanbanViewStore] = useInjectionState(
             ...(isUIAllowed('sortSync') ? {} : { sortArrJson: JSON.stringify(sorts.value) }),
             ...(isUIAllowed('filterSync') ? {} : { filterArrJson: JSON.stringify(nestedFilters.value) }),
             where,
-          })
+            // Fetch the linked records behind each Links column's count so the card
+            // can show their values as chips rather than just how many there are.
+            includeLinkPreview: true,
+          } as any)
         : await fetchSharedViewData({
             ...params,
             sortsArr: sorts.value,
             filtersArr: nestedFilters.value,
             offset: params.offset,
             where,
+            includeLinkPreview: true,
           })
 
       formattedData.value.set(stackTitle, [

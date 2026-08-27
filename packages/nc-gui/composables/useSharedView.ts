@@ -154,6 +154,8 @@ export function useSharedView() {
       where?: string
       /** Query params for nested data */
       nested?: any
+      /** Return a bounded preview of the linked records behind each Links column's count */
+      includeLinkPreview?: boolean
       offset?: number
       limit?: number
     },

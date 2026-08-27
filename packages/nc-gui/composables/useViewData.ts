@@ -259,12 +259,20 @@ export function useViewData(
               where: where?.value,
               ...(excludePageInfo.value ? { excludeCount: 'true' } : {}),
               include_row_color: true,
+              // Fetch the linked records behind each Links column's count so the cell
+              // can show their values as chips rather than just how many there are.
+              includeLinkPreview: true,
             } as any,
             {
               cancelToken: controller.value.token,
             },
           )
-        : await fetchSharedViewData({ sortsArr: sorts.value, filtersArr: nestedFilters.value, where: where?.value })
+        : await fetchSharedViewData({
+            sortsArr: sorts.value,
+            filtersArr: nestedFilters.value,
+            where: where?.value,
+            includeLinkPreview: true,
+          })
 
       syncViewSearchCount(params)
     } catch (error) {

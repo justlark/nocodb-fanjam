@@ -641,6 +641,9 @@ export function useInfiniteData(args: {
             includeSortAndFilterColumns: true,
             where: whereFilter,
             include_row_color: true,
+            // Fetch the linked records behind each Links column's count so the cell
+            // can show their values as chips rather than just how many there are.
+            includeLinkPreview: true,
           } as any)
         : await fetchSharedViewData(
             {
@@ -649,6 +652,7 @@ export function useInfiniteData(args: {
               where: whereFilter,
               offset: params.offset,
               limit: params.limit,
+              includeLinkPreview: true,
             },
             {
               isInfiniteScroll: true,

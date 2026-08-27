@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from '@vue/reactivity'
 import type { ColumnType } from 'nocodb-sdk'
+import { getLinkPreviewKey } from 'nocodb-sdk'
 import type { Ref } from 'vue'
 import { ref } from 'vue'
 import { forcedNextTick } from '../../utils/browserUtils'
@@ -23,6 +24,8 @@ const readOnly = inject(ReadonlyInj, ref(false))
 const isUnderLookup = inject(IsUnderLookupInj, ref(false))
 
 const isExpandedFormOpen = inject(IsExpandedFormOpenInj, ref(false))
+
+const rowHeight = inject(RowHeightInj, ref())
 
 const canvasCellEventData = inject(CanvasCellEventDataInj, reactive<CanvasCellEventDataInjType>({}))
 
@@ -56,6 +59,35 @@ const relatedTableDisplayColumn = computed(
 )
 
 loadRelatedTableMeta()
+
+/**
+ * A Links cell value is only a count. The linked records themselves arrive alongside
+ * it under `_nc_lk_<title>` when the list request opts into a link preview, which lets
+ * us show the values rather than just how many there are.
+ *
+ * Empty whenever no preview was fetched (form view, unsaved row, older cached data),
+ * in which case the cell falls back to the count text.
+ */
+const linkPreview = computed<Record<string, any>[] | null>(() => {
+  if (isForm.value || isNew.value || !relatedTableDisplayValueProp.value) return null
+
+  const preview = row.value?.row?.[getLinkPreviewKey(colTitle.value)]
+
+  if (ncIsArray(preview)) return preview
+
+  // The reverse side of a one-to-one resolves to a single record
+  return ncIsObject(preview) ? [preview] : null
+})
+
+const previewCells = computed<{ value: any; item: Record<string, any> }[]>(() =>
+  (linkPreview.value ?? []).reduce((acc, item) => {
+    if (!ncIsObject(item)) return acc
+
+    acc.push({ value: item[relatedTableDisplayValueProp.value], item })
+
+    return acc
+  }, [] as { value: any; item: Record<string, any> }[]),
+)
 
 const hasEditPermission = computed(() => {
   return (!readOnly.value && isUIAllowed('dataEdit') && !isUnderLookup.value) || isForm.value
@@ -175,7 +207,10 @@ onMounted(() => {
 
       if (getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-icon-plus', clientMousePosition)) {
         openListDlg()
-      } else if (getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-text', clientMousePosition)) {
+      } else if (
+        getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-text', clientMousePosition) ||
+        getElementAtMouse('.nc-canvas-table-editable-cell-wrapper .nc-canvas-links-maximize-icon', clientMousePosition)
+      ) {
         openChildList()
       } else if (hasEditPermission.value) {
         openListDlg()
@@ -194,7 +229,51 @@ onUnmounted(() => {
 <template>
   <div class="nc-cell-field flex w-full group items-center nc-links-wrapper py-1" @dblclick.stop="openChildList">
     <VirtualCellComponentsLinkRecordDropdown v-model:is-open="isOpen">
-      <div class="flex w-full group items-center min-h-4">
+      <div v-if="linkPreview" class="flex items-center gap-1 w-full chips-wrapper min-h-4 relative">
+        <div
+          class="chips flex items-center flex-1 min-w-0 overflow-x-hidden overflow-y-auto"
+          :class="{ 'flex-wrap': rowHeight !== 1 }"
+          :style="{ maxHeight: `${rowHeightInPx[rowHeight ?? 1]}px` }"
+        >
+          <VirtualCellComponentsItemChip
+            v-for="(cell, i) of previewCells"
+            :key="i"
+            :item="cell.item"
+            :value="cell.value"
+            :column="relatedTableDisplayColumn"
+            :show-unlink-button="false"
+          />
+        </div>
+
+        <div
+          v-if="!isUnderLookup"
+          class="flex justify-end gap-[2px] min-h-4 items-center absolute right-0 top-0 bottom-0 links-actions"
+          :class="{ active: isOpen }"
+          @click.stop
+        >
+          <NcButton
+            v-if="hasEditPermission"
+            size="xsmall"
+            type="secondary"
+            class="nc-action-icon nc-canvas-links-icon-plus"
+            @click.stop="openListDlg"
+          >
+            <GeneralIcon icon="plus" class="text-sm nc-plus" />
+          </NcButton>
+          <NcTooltip :title="$t('tooltip.expandShiftSpace')" :disabled="isExpandedFormOpen" class="flex">
+            <NcButton
+              size="xsmall"
+              type="secondary"
+              class="nc-action-icon nc-canvas-links-maximize-icon"
+              @click.stop="openChildList"
+            >
+              <GeneralIcon icon="maximize" />
+            </NcButton>
+          </NcTooltip>
+        </div>
+      </div>
+
+      <div v-else class="flex w-full group items-center min-h-4">
         <div class="block flex-shrink truncate">
           <component
             :is="isUnderLookup ? 'span' : 'a'"
@@ -247,3 +326,24 @@ onUnmounted(() => {
     </VirtualCellComponentsLinkRecordDropdown>
   </div>
 </template>
+
+<style scoped>
+.links-actions {
+  @apply hidden;
+}
+
+.links-actions.active,
+.chips-wrapper:hover .links-actions {
+  @apply flex;
+}
+</style>
+
+<style lang="scss">
+.nc-default-value-wrapper,
+.nc-expanded-cell,
+.ant-form-item-control-input {
+  .links-actions {
+    @apply !flex;
+  }
+}
+</style>

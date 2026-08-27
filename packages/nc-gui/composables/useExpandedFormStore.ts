@@ -511,7 +511,9 @@ const [useProvideExpandedFormStore, useExpandedFormStore] = useInjectionState(
           encodeURIComponent(recordId),
           {
             getHiddenColumn: true,
-          },
+            // Keeps Links cells showing chips in the expanded record, same as the grid
+            includeLinkPreview: true,
+          } as any,
         )
       } catch (err: any) {
         if (err.response?.status === 404) {

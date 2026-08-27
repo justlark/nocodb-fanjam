@@ -19,6 +19,8 @@ const { isUIAllowed } = useRoles()
 
 const { isMobileMode } = useGlobal()
 
+const hasBaseOverview = computed(() => isUIAllowed('projectOverviewTab'))
+
 const { meta: metaKey, control } = useMagicKeys()
 
 const projectNodeRef = ref()
@@ -51,7 +53,7 @@ const openBaseHomePage = async () => {
       id: base.value.id!,
       type: 'database',
       isSharedBase: isSharedBase.value,
-      projectPage: !isUIAllowed('projectOverviewTab') || isMobileMode.value ? 'collaborator' : undefined,
+      projectPage: !hasBaseOverview.value || isMobileMode.value ? 'collaborator' : undefined,
     })}`,
     cmdOrCtrl
       ? {
@@ -143,8 +145,8 @@ const hasTableCreatePermission = computed(() => {
               'font-semibold': activeProjectId === base.id && baseViewOpen,
             }"
           >
-            <GeneralIcon icon="home1" class="!h-4 w-4" />
-            <div>{{ $t('general.overview') }}</div>
+            <GeneralIcon :icon="hasBaseOverview ? 'home1' : 'users'" class="!h-4 w-4" />
+            <div>{{ hasBaseOverview ? $t('general.overview') : $t('labels.members') }}</div>
           </div>
         </NcButton>
       </div>

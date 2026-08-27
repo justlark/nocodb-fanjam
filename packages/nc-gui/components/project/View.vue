@@ -66,6 +66,19 @@ const { isFeatureEnabled } = useBetaFeatureToggle()
 
 const isOverviewTabVisible = computed(() => isUIAllowed('projectOverviewTab'))
 
+/**
+ * Editors and below only have the members tab, so the tab bar is dropped and the members list is
+ * rendered directly. It needs `!h-full` since AccessSettings otherwise reserves 44px for the tab strip.
+ * The admin panel always keeps the tabs.
+ */
+const showProjectTabs = computed(() => isAdminPanel.value || isOverviewTabVisible.value)
+
+/**
+ * Which of the two layouts to draw depends on the base role, so hold the content back until the roles
+ * resolve — same wait the `route.query.page` watcher below does — rather than flashing the wrong one.
+ */
+const isBaseViewReady = computed(() => isAdminPanel.value || isBaseRolesLoaded.value)
+
 const projectPageTab = computed({
   get() {
     return _projectPageTab.value
@@ -216,13 +229,13 @@ onMounted(() => {
       <LazyGeneralShareProject v-if="!showEmptySkeleton && !isMobileMode" />
     </div>
     <div
-      v-if="!showEmptySkeleton"
+      v-if="!showEmptySkeleton && isBaseViewReady"
       class="flex nc-base-view-tab"
       :style="{
         height: 'calc(100% - var(--topbar-height))',
       }"
     >
-      <a-tabs v-model:active-key="projectPageTab" class="w-full">
+      <a-tabs v-if="showProjectTabs" v-model:active-key="projectPageTab" class="w-full">
         <template #leftExtra>
           <div class="w-3"></div>
         </template>
@@ -314,6 +327,7 @@ onMounted(() => {
           <DashboardSettingsBase :base-id="base.id!" class="max-h-full" />
         </a-tab-pane>
       </a-tabs>
+      <ProjectAccessSettings v-else :base-id="currentBase?.id" class="w-full !h-full" />
     </div>
   </div>
 </template>

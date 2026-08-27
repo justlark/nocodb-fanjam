@@ -303,3 +303,16 @@ export const RowHeightMap = {
   [RowHeight.TALL]: 'tall',
   [RowHeight.EXTRA]: 'extra',
 };
+
+/**
+ * Prefix used to expose the linked rows of a `Links` column alongside its count.
+ *
+ * A `Links` column resolves to a scalar count, so the nested rows are installed on
+ * the row proto under `_nc_lk_<title>` instead of the column title. Requesting that
+ * key (see `includeLinkPreview`) returns a bounded preview of the linked records,
+ * which the grid renders as chips.
+ */
+export const NC_LINK_PREVIEW_PREFIX = '_nc_lk_';
+
+export const getLinkPreviewKey = (columnTitle: string) =>
+  `${NC_LINK_PREVIEW_PREFIX}${columnTitle}`;

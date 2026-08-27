@@ -3,6 +3,14 @@ export const defaultLimitConfig = {
   limitMin: Math.max(+process.env.DB_QUERY_LIMIT_MIN || 1, 1),
   limitMax: Math.max(+process.env.DB_QUERY_LIMIT_MAX || 1000, 1),
   ltarV3Limit: Math.max(+process.env.DB_QUERY_LIMIT_LTAR_V3_LIMIT || 1000, 1),
+  // Linked rows returned per cell when a list request asks for a link preview.
+  // Set to 0 to stop serving previews altogether.
+  linkPreviewLimit: Math.max(
+    process.env.DB_QUERY_LIMIT_LINK_PREVIEW
+      ? +process.env.DB_QUERY_LIMIT_LINK_PREVIEW || 0
+      : 10,
+    0,
+  ),
 } as const;
 
 export const defaultGroupByLimitConfig = {

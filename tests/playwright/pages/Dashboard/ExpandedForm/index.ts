@@ -3,6 +3,11 @@ import BasePage from '../../Base';
 import { DashboardPage } from '..';
 import { DateTimeCellPageObject } from '../common/Cell/DateTimeCell';
 
+// The "link a record" button. A Links field also renders a maximize button beside it,
+// so `.nc-action-icon` alone is ambiguous - the `nc-plus` pair is what BelongsTo,
+// OneToOne and Links all put on the add button itself.
+const LINK_ADD_BTN = '.nc-action-icon.nc-plus';
+
 export class ExpandedFormPage extends BasePage {
   readonly dashboard: DashboardPage;
   readonly addNewTableButton: Locator;
@@ -121,7 +126,7 @@ export class ExpandedFormPage extends BasePage {
       }
       case 'belongsTo':
         await field.locator('.nc-virtual-cell').hover();
-        await field.locator('.nc-action-icon').click();
+        await field.locator(LINK_ADD_BTN).click();
         if (ltarCount !== undefined && ltarCount !== null) {
           await this.dashboard.linkRecord.verifyCount(`${ltarCount}`);
         }
@@ -130,7 +135,7 @@ export class ExpandedFormPage extends BasePage {
       case 'hasMany':
       case 'manyToMany':
         await field.locator('.nc-virtual-cell').hover();
-        await field.locator('.nc-action-icon').click();
+        await field.locator(LINK_ADD_BTN).click();
         if (ltarCount !== undefined && ltarCount !== null) {
           await this.dashboard.linkRecord.verifyCount(`${ltarCount}`);
         }
@@ -210,8 +215,12 @@ export class ExpandedFormPage extends BasePage {
 
   async openChildCard(param: { column: string; title: string }) {
     const childField = this.get().locator(`[data-testid="nc-expand-col-${param.column}"]`);
-    await childField.locator('.nc-datatype-link').waitFor({ state: 'visible' });
-    await childField.locator('.nc-datatype-link').click();
+    // Links fields show the linked values as chips, so the child list is opened from
+    // the maximize button that appears on hover.
+    const expandBtn = childField.locator('.nc-canvas-links-maximize-icon, .nc-has-many-maximize-icon').first();
+    await childField.hover();
+    await expandBtn.waitFor({ state: 'visible' });
+    await expandBtn.click();
 
     const card = await this.rootPage.locator(`.ant-card:has-text("${param.title}")`);
     await card.hover();

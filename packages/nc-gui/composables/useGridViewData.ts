@@ -1,5 +1,6 @@
 import {
   type ColumnType,
+  NC_LINK_PREVIEW_PREFIX,
   type TableType,
   type ViewType,
   isCreatedOrLastModifiedByCol,
@@ -613,6 +614,11 @@ export function useGridViewData(
         const cleanedRow = { ...row }
         metaValue?.columns?.forEach((col) => {
           if (col.system || isVirtualCol(col)) delete cleanedRow[col.title!]
+        })
+        // Link previews ride along under a companion key rather than a column title, so
+        // stripping columns alone would send them back to the API as unknown fields.
+        Object.keys(cleanedRow).forEach((key) => {
+          if (key.startsWith(NC_LINK_PREVIEW_PREFIX)) delete cleanedRow[key]
         })
         return cleanedRow
       }

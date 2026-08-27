@@ -137,10 +137,12 @@ test.describe('LTAR create & update', () => {
 
     await dashboard.expandedForm.save();
 
+    // Every Sheet2 record links to exactly one Sheet1 record, so all three link
+    // columns show that record's title as a chip.
     const expected = [
       [['1a'], ['1b'], ['1c']],
-      [['1 Sheet1'], ['1 Sheet1'], ['1 Sheet1']],
-      [['1 Sheet1'], ['1 Sheet1'], ['1 Sheet1']],
+      [['1a'], ['1b'], ['1c']],
+      [['1a'], ['1b'], ['1c']],
     ];
     const colHeaders = ['Sheet1', 'Sheet1s', 'Link2-1hm'];
 
@@ -166,9 +168,10 @@ test.describe('LTAR create & update', () => {
     await dashboard.grid.toolbar.fields.click({ title: 'Sheet2', isLocallySaved: false });
     await dashboard.grid.toolbar.clickFields();
 
+    // ... and symmetrically from the Sheet1 side.
     const expected2 = [
-      [['1 Sheet2'], ['1 Sheet2'], ['1 Sheet2']],
-      [['1 Sheet2'], ['1 Sheet2'], ['1 Sheet2']],
+      [['2a'], ['2b'], ['2c']],
+      [['2a'], ['2b'], ['2c']],
       [['2a'], ['2b'], ['2c']],
     ];
     const colHeaders2 = ['Link1-2hm', 'Link1-2mm', 'Sheet2'];

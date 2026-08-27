@@ -1,4 +1,5 @@
 import {
+  getLinkPreviewKey,
   isCreatedOrLastModifiedByCol,
   isCreatedOrLastModifiedTimeCol,
   isLinksOrLTAR,
@@ -31,6 +32,7 @@ import {
   KanbanViewColumn,
   View,
 } from '~/models';
+import { defaultLimitConfig } from '~/helpers/extractLimitAndOffset';
 import RowColorCondition from '~/models/RowColorCondition';
 import Noco from '~/Noco';
 
@@ -52,6 +54,7 @@ const getAst = async (
       fieldsSet: new Set(),
     },
     getHiddenColumn = query?.['getHiddenColumn'] === 'true',
+    includeLinkPreview = query?.['includeLinkPreview'] === 'true',
     throwErrorIfInvalidParams = false,
     extractOnlyRangeFields = false,
     apiVersion = NcApiVersion.V2,
@@ -67,6 +70,9 @@ const getAst = async (
     view?: View;
     dependencyFields?: DependantFields;
     getHiddenColumn?: boolean;
+    // Emit a bounded preview of the linked rows of each `Links` column
+    // alongside its count, under `_nc_lk_<title>`.
+    includeLinkPreview?: boolean;
     throwErrorIfInvalidParams?: boolean;
     // Used for calendar view
     extractOnlyRangeFields?: boolean;
@@ -88,6 +94,16 @@ const getAst = async (
   const getFieldKey = (col: Column) => {
     return skipSubstitutingColumnIds ? col.id : col.title;
   };
+
+  // v3 has its own LTAR representation (see data-v3.service), and keying the
+  // response by column id would not match the `_nc_lk_<title>` proto key.
+  const shouldPreviewLinks = (col: Column) =>
+    includeLinkPreview &&
+    defaultLimitConfig.linkPreviewLimit > 0 &&
+    col.uidt === UITypes.Links &&
+    !col.system &&
+    !skipSubstitutingColumnIds &&
+    apiVersion !== NcApiVersion.V3;
 
   let coverImageId;
   let dependencyFieldsForCalenderView;
@@ -349,13 +365,76 @@ const getAst = async (
     if (isRequested || col.pk)
       await extractDependencies(context, col, dependencyFields);
 
+    // A `Links` column resolves to a scalar count, so its linked rows live on the
+    // row proto under `_nc_lk_<title>`. Request that key as well so the client can
+    // show the linked values instead of just how many there are.
+    const linkPreviewAst =
+      isRequested && shouldPreviewLinks(col)
+        ? await getLinkPreviewAst(context, col, dependencyFields)
+        : null;
+
     return {
       ...(await obj),
       [getFieldKey(col)]: isRequested,
+      ...(linkPreviewAst
+        ? { [getLinkPreviewKey(col.title)]: linkPreviewAst }
+        : {}),
     };
   }, Promise.resolve({}));
 
   return { ast, dependencyFields, parsedQuery: dependencyFields };
+};
+
+/**
+ * Build the nested AST for a `Links` column's preview rows.
+ *
+ * Only the primary key and display value are extracted - that is all a chip needs -
+ * and the per-cell row limit is stashed on `dependencyFields.nested` so that
+ * `nocoExecute` forwards it to the `hmList`/`mmList` resolver as its list args.
+ */
+const getLinkPreviewAst = async (
+  context: NcContext,
+  col: Column,
+  dependencyFields: DependantFields,
+): Promise<Ast | null> => {
+  const colOpt = await col.getColOptions<LinkToAnotherRecordColumn>(context);
+
+  // Only the sides that `getProto` installs under the `_nc_lk_` key resolve to
+  // linked rows. A belongs-to (and the owning side of a one-to-one) keeps the
+  // column title itself, so there is nothing extra to request.
+  const isPreviewable =
+    colOpt?.type === RelationTypes.HAS_MANY ||
+    colOpt?.type === RelationTypes.MANY_TO_MANY ||
+    (colOpt?.type === RelationTypes.ONE_TO_ONE && !col.meta?.bt);
+
+  if (!isPreviewable) return null;
+
+  const { refContext } = colOpt.getRelContext(context);
+  const relatedModel = await colOpt.getRelatedTable(context);
+
+  const previewKey = getLinkPreviewKey(col.title);
+
+  // Built fresh rather than defaulted from the outer query, so that the parent's
+  // `limit`/`where`/`fields` cannot leak into the nested list args.
+  const nestedDependencyFields = (dependencyFields.nested[previewKey] =
+    dependencyFields.nested[previewKey] || {
+      nested: {},
+      fieldsSet: new Set(),
+    });
+
+  // Read back by `getListArgs` in the relation data fetcher
+  (nestedDependencyFields as Record<string, any>).limit =
+    defaultLimitConfig.linkPreviewLimit;
+
+  // Fills `nestedDependencyFields.fieldsSet` with the related table's pk and display
+  // value, which is what the fetcher selects for each linked row.
+  const { ast } = await getAst(refContext, {
+    model: relatedModel,
+    extractOnlyPrimaries: true,
+    dependencyFields: nestedDependencyFields,
+  });
+
+  return ast;
 };
 
 const getViewRowColorFields = async (params: {

@@ -55,41 +55,6 @@ jobs:
             echo "swaggerv2.json file is not valid JSON"
             exit 1
           fi
-  unit-tests:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 40
-    if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'trigger-CI') || !github.event.pull_request.draft }}
-    steps:
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.3
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 22.12.0
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: remove use-node-version from .npmrc
-        run: sed -i '/^use-node-version/d' .npmrc
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-      - uses: actions/cache@v3
-        name: Setup pnpm cache
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-      - name: Install dependencies for packages
-        run: pnpm bootstrap
-      - name: run unit tests
-        working-directory: ./packages/nocodb
-        run: pnpm run test:unit
   unit-tests-pg:
     runs-on: ubuntu-22.04
     timeout-minutes: 40
@@ -134,34 +99,6 @@ jobs:
   pre-build-for-playwright:
     uses: ./.github/workflows/pre-build-for-playwright.yml
 
-  playwright-sqlite-1:
-    needs: pre-build-for-playwright
-    if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'trigger-CI') || !github.event.pull_request.draft }}
-    uses: ./.github/workflows/playwright-test-workflow.yml
-    with:
-      db: sqlite
-      shard: 1
-  playwright-sqlite-2:
-    needs: pre-build-for-playwright
-    if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'trigger-CI') || !github.event.pull_request.draft }}
-    uses: ./.github/workflows/playwright-test-workflow.yml
-    with:
-      db: sqlite
-      shard: 2
-  playwright-sqlite-3:
-    needs: pre-build-for-playwright
-    if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'trigger-CI') || !github.event.pull_request.draft }}
-    uses: ./.github/workflows/playwright-test-workflow.yml
-    with:
-      db: sqlite
-      shard: 3
-  playwright-sqlite-4:
-    needs: pre-build-for-playwright
-    if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'trigger-CI') || !github.event.pull_request.draft }}
-    uses: ./.github/workflows/playwright-test-workflow.yml
-    with:
-      db: sqlite
-      shard: 4
   playwright-pg-shard-1:
     needs: pre-build-for-playwright
     if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'trigger-CI') || !github.event.pull_request.draft }}

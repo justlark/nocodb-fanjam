@@ -210,8 +210,12 @@ export class ExpandedFormPage extends BasePage {
 
   async openChildCard(param: { column: string; title: string }) {
     const childField = this.get().locator(`[data-testid="nc-expand-col-${param.column}"]`);
-    await childField.locator('.nc-datatype-link').waitFor({ state: 'visible' });
-    await childField.locator('.nc-datatype-link').click();
+    // Links fields show the linked values as chips, so the child list is opened from
+    // the maximize button that appears on hover.
+    const expandBtn = childField.locator('.nc-canvas-links-maximize-icon, .nc-has-many-maximize-icon').first();
+    await childField.hover();
+    await expandBtn.waitFor({ state: 'visible' });
+    await expandBtn.click();
 
     const card = await this.rootPage.locator(`.ant-card:has-text("${param.title}")`);
     await card.hover();

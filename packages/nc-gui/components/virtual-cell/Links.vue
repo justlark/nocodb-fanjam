@@ -251,14 +251,17 @@ onUnmounted(() => {
           :class="{ active: isOpen }"
           @click.stop
         >
+          <!-- `nc-action-icon nc-plus` must stay together on the clickable element:
+               that pair is how BelongsTo/OneToOne mark their add button too, and it is
+               the shared selector for in-cell add. -->
           <NcButton
             v-if="hasEditPermission"
             size="xsmall"
             type="secondary"
-            class="nc-action-icon nc-canvas-links-icon-plus"
+            class="nc-action-icon nc-plus nc-canvas-links-icon-plus"
             @click.stop="openListDlg"
           >
-            <GeneralIcon icon="plus" class="text-sm nc-plus" />
+            <GeneralIcon icon="plus" class="text-sm" />
           </NcButton>
           <NcTooltip :title="$t('tooltip.expandShiftSpace')" :disabled="isExpandedFormOpen" class="flex">
             <NcButton

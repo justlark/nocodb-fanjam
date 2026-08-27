@@ -32,8 +32,6 @@ export const useWorkspace = defineStore('workspaceStore', () => {
 
   const isIntegrationsPageOpened = computed(() => route.value.name === 'index-typeOrId-integrations')
 
-  const isFeedPageOpened = computed(() => route.value.name === 'index-typeOrId-feed')
-
   const isWorkspaceLoading = ref(true)
   const isWorkspacesLoading = ref(false)
   const isCollaboratorsLoading = ref(true)
@@ -238,19 +236,6 @@ export const useWorkspace = defineStore('workspaceStore', () => {
     }
   }
 
-  const navigateToFeed = async (_?: string, cmdOrCtrl?: boolean, query: Record<string, string> = {}) => {
-    if (cmdOrCtrl) {
-      await navigateTo(
-        { path: '/nc/feed', query },
-        {
-          open: navigateToBlankTargetOpenOption,
-        },
-      )
-    } else {
-      await navigateTo({ path: '/nc/feed', query })
-    }
-  }
-
   function setLoadingState(isLoading = false) {
     isWorkspaceLoading.value = isLoading
   }
@@ -298,10 +283,8 @@ export const useWorkspace = defineStore('workspaceStore', () => {
     getPlanLimit,
     workspaceRole,
     moveToOrg,
-    navigateToFeed,
     isIntegrationsPageOpened,
     navigateToIntegrations,
-    isFeedPageOpened,
     deletingWorkspace,
     isWorkspacesLoading,
     upgradeWsDlg,

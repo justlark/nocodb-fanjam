@@ -5,7 +5,7 @@ const router = useRouter()
 
 const route = router.currentRoute
 
-const { appInfo, navigateToProject, isMobileMode } = useGlobal()
+const { navigateToProject, isMobileMode } = useGlobal()
 
 const { meta: metaKey, control } = useMagicKeys()
 
@@ -79,7 +79,6 @@ useEventListener(document, 'keydown', async (e: KeyboardEvent) => {
     (!isBaseSearchInput &&
       (isActiveInputElementExist(e) ||
         cmdKActive() ||
-        isCmdJActive() ||
         isNcDropdownOpen() ||
         isActiveElementInsideExtension() ||
         isDrawerOrModalExist() ||
@@ -172,23 +171,6 @@ useEventListener(document, 'keydown', async (e: KeyboardEvent) => {
           </div>
         </NcTooltip>
       </DashboardMiniSidebarItemWrapper>
-      <DashboardMiniSidebarItemWrapper>
-        <NcTooltip placement="right" hide-on-click :arrow="false">
-          <template #title>
-            <div class="flex items-center gap-1">{{ $t('labels.searchDocumentation') }} {{ renderCmdOrCtrlKey(true) }} J</div>
-          </template>
-          <div
-            v-e="['c:quick-actions']"
-            class="nc-mini-sidebar-btn-full-width"
-            data-testid="nc-sidebar-cmd-j-btn"
-            @click="setActiveCmdView('cmd-j')"
-          >
-            <div class="nc-mini-sidebar-btn">
-              <GeneralIcon icon="ncFile" class="h-4 w-4" />
-            </div>
-          </div>
-        </NcTooltip>
-      </DashboardMiniSidebarItemWrapper>
       <div
         v-if="(!isMobileMode || isEeUI) && (isUIAllowed('workspaceSettings') || isUIAllowed('workspaceCollaborators'))"
         class="px-2 my-2 w-full"
@@ -261,32 +243,16 @@ useEventListener(document, 'keydown', async (e: KeyboardEvent) => {
         <DashboardMiniSidebarTheme />
       </DashboardMiniSidebarItemWrapper>
 
-      <DashboardMiniSidebarItemWrapper>
-        <NcTooltip :title="$t('general.help')" placement="right" hide-on-click :arrow="false">
-          <DashboardMiniSidebarHelp />
-        </NcTooltip>
-      </DashboardMiniSidebarItemWrapper>
       <template v-if="!isMobileMode">
-        <DashboardMiniSidebarItemWrapper>
-          <NcTooltip
-            v-if="appInfo.feedEnabled"
-            :title="`${$t('title.whatsNew')}!`"
-            placement="right"
-            hide-on-click
-            :arrow="false"
-          >
-            <DashboardSidebarFeed />
-          </NcTooltip>
-        </DashboardMiniSidebarItemWrapper>
         <DashboardMiniSidebarItemWrapper v-if="isChatWootEnabled">
           <NcTooltip :title="`${$t('labels.chatWithNocoDBSupport')}!`" placement="right" hide-on-click :arrow="false">
             <DashboardSidebarChatSupport />
           </NcTooltip>
         </DashboardMiniSidebarItemWrapper>
-        <div class="px-2 w-full">
+        <div v-if="isUIAllowed('createNewMenu')" class="px-2 w-full">
           <NcDivider class="!my-2 !border-nc-border-gray-dark" />
         </div>
-        <DashboardMiniSidebarItemWrapper>
+        <DashboardMiniSidebarItemWrapper v-if="isUIAllowed('createNewMenu')">
           <NcTooltip v-if="!isSharedBase" :title="$t('labels.createNew')" placement="right" hide-on-click :arrow="false">
             <DashboardMiniSidebarCreateNewActionMenu />
           </NcTooltip>

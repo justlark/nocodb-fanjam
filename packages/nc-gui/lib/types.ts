@@ -275,7 +275,7 @@ interface UsersSortType {
   direction?: 'asc' | 'desc'
 }
 
-type CommandPaletteType = 'cmd-k' | 'cmd-j' | 'cmd-l'
+type CommandPaletteType = 'cmd-k' | 'cmd-l'
 
 interface FormFieldsLimitOptionsType {
   id: string

@@ -24,7 +24,6 @@ import { ShareProjectButtonPage } from './ShareProjectButton';
 import { WorkspacePage } from '../WorkspacePage';
 import { DetailsPage } from './Details';
 import { WorkspaceSettingsObject } from './WorkspaceSettings';
-import { CmdJ } from './Command/CmdJPage';
 import { CmdK } from './Command/CmdKPage';
 import { CmdL } from './Command/CmdLPage';
 import { CalendarPage } from './Calendar';
@@ -59,7 +58,6 @@ export class DashboardPage extends BasePage {
   readonly shareProjectButton: ShareProjectButtonPage;
   readonly details: DetailsPage;
   readonly workspaceSettings: WorkspaceSettingsObject;
-  readonly cmdJ: CmdJ;
   readonly cmdK: CmdK;
   readonly cmdL: CmdL;
   readonly extensions: Extensions;
@@ -93,7 +91,6 @@ export class DashboardPage extends BasePage {
     this.shareProjectButton = new ShareProjectButtonPage(this);
     this.details = new DetailsPage(this);
     this.workspaceSettings = new WorkspaceSettingsObject(this);
-    this.cmdJ = new CmdJ(this);
     this.cmdK = new CmdK(this);
     this.cmdL = new CmdL(this);
     this.extensions = new Extensions(this);

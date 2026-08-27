@@ -10,10 +10,8 @@ type MiniSidebarActionType =
   | 'base'
   | 'cmd-k'
   | 'cmd-l'
-  | 'cmd-j'
   | 'teamAndSettings'
   | 'integration'
-  | 'feeds'
   | 'notification'
   | 'userInfo';
 
@@ -209,10 +207,8 @@ export class LeftSidebarPage extends BasePage {
       base: this.miniSidebar.getByTestId('nc-sidebar-project-btn'),
       'cmd-k': this.miniSidebar.getByTestId('nc-sidebar-cmd-k-btn'),
       'cmd-l': this.miniSidebar.getByTestId('nc-sidebar-cmd-l-btn'),
-      'cmd-j': this.miniSidebar.getByTestId('nc-sidebar-cmd-j-btn'),
       teamAndSettings: this.miniSidebar.getByTestId('nc-sidebar-team-settings-btn'),
       integration: this.miniSidebar.getByTestId('nc-sidebar-integrations-btn'),
-      feeds: this.miniSidebar.getByTestId('nc-sidebar-product-feed'),
       notification: this.miniSidebar.getByTestId('nc-sidebar-notification-btn'),
       userInfo: this.miniSidebar.getByTestId('nc-sidebar-userinfo'),
     };

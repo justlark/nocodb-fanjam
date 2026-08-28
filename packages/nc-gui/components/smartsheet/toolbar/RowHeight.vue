@@ -22,6 +22,13 @@ const rowHeightOptions: { icon: keyof typeof iconMap; heightClass: string }[] = 
 
 const { isSharedBase } = storeToRefs(useBase())
 
+const { isMobileMode } = useGlobal()
+
+const isToolbarIconMode = inject(
+  IsToolbarIconMode,
+  computed(() => false),
+)
+
 const viewStore = useViewsStore()
 
 const { updateViewMeta } = viewStore
@@ -82,20 +89,27 @@ useMenuCloseOnEsc(open)
     :trigger="['click']"
     overlay-class-name="nc-dropdown-height-menu overflow-hidden"
   >
-    <div>
+    <NcTooltip :disabled="!isMobileMode && !isToolbarIconMode">
+      <template #title>
+        {{ $t('objects.rowHeight') }}
+      </template>
       <NcButton
         v-e="['c:row-height']"
-        class="nc-height-menu-btn nc-toolbar-btn !border-0 !h-7 !px-1.5 !min-w-7"
+        class="nc-height-menu-btn nc-toolbar-btn !border-0 !h-7"
         size="small"
         type="secondary"
         :show-as-disabled="isLocked"
       >
-        <div class="flex items-center gap-0.5">
-          <component :is="iconMap.rowHeight" class="!h-3.75 !w-3.75" />
-          <!-- <span v-if="!isMobileMode" class="!text-sm !font-medium">{{ $t('objects.rowHeight') }}</span> -->
+        <div class="flex items-center gap-2 min-h-5">
+          <component :is="iconMap.rowHeight" class="!h-4 !w-4" />
+
+          <!-- Record Height -->
+          <span v-if="!isMobileMode && !isToolbarIconMode" class="text-capitalize !text-[13px] font-medium">{{
+            $t('objects.rowHeight')
+          }}</span>
         </div>
       </NcButton>
-    </div>
+    </NcTooltip>
     <template #overlay>
       <div class="p-1.5 menu-filter-dropdown min-w-[160px]" data-testid="nc-height-menu">
         <div class="flex flex-col w-full text-sm" @click.stop>

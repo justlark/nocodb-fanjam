@@ -276,8 +276,8 @@ defineOptions({
       </NcMenuItem>
     </template>
     <template v-if="view.type !== ViewTypes.FORM">
-      <NcDivider />
-      <template v-if="isUploadAllowed">
+      <template v-if="isUploadAllowed && inSidebar">
+        <NcDivider />
         <NcSubMenu key="upload" variant="small">
           <template #title>
             <div

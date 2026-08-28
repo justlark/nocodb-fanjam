@@ -24,6 +24,9 @@ const workspaceStore = useWorkspace()
 
 const { removeCollaborator: _removeCollaborator, updateCollaborator: _updateCollaborator } = workspaceStore
 
+/** FanJam-specific: users must not be able to downgrade themselves and lose access to the workspace. */
+const isCurrentUser = (collab: { id?: string }) => !!user.value?.id && collab.id === user.value.id
+
 const { collaborators, activeWorkspace, workspacesList, isCollaboratorsLoading, removingCollaboratorMap } =
   storeToRefs(workspaceStore)
 
@@ -122,6 +125,8 @@ const selectAll = computed({
 })
 
 const updateCollaborator = async (collab: any, roles: WorkspaceUserRoles) => {
+  if (isCurrentUser(collab)) return
+
   if (!currentWorkspace.value || !currentWorkspace.value.id) return
 
   try {
@@ -431,7 +436,12 @@ const removeCollaborator = (userId: string, workspaceId: string) => {
             </div>
             <div v-if="column.key === 'role'">
               <template
-                v-if="isDeleteOrUpdateAllowed(record) && isOwnerOrCreator && accessibleRoles.includes(record.roles as WorkspaceUserRoles)"
+                v-if="
+                  !isCurrentUser(record) &&
+                  isDeleteOrUpdateAllowed(record) &&
+                  isOwnerOrCreator &&
+                  accessibleRoles.includes(record.roles as WorkspaceUserRoles)
+                "
               >
                 <RolesSelector
                   :description="false"
@@ -442,7 +452,13 @@ const removeCollaborator = (userId: string, workspaceId: string) => {
                 />
               </template>
               <template v-else>
-                <RolesBadge :border="false" :role="record.roles" class="cursor-default" />
+                <NcTooltip v-if="isCurrentUser(record)" class="w-fit">
+                  <template #title>
+                    {{ $t('tooltip.cannotChangeOwnRole') }}
+                  </template>
+                  <RolesBadge :border="false" :role="record.roles" class="cursor-default" />
+                </NcTooltip>
+                <RolesBadge v-else :border="false" :role="record.roles" class="cursor-default" />
               </template>
             </div>
             <div v-if="column.key === 'created_at'">

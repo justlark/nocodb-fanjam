@@ -17,6 +17,11 @@ const { activeProjectId, bases, basesUser } = storeToRefs(basesStore)
 
 const { orgRoles, baseRoles, loadRoles, isUIAllowed } = useRoles()
 
+const { user } = useGlobal()
+
+/** FanJam-specific: users must not be able to downgrade themselves and lose access to the base. */
+const isCurrentUser = (collab: { id?: string }) => !!user.value?.id && collab.id === user.value.id
+
 const { sorts, sortDirection, loadSorts, handleGetSortedData, saveOrUpdate: saveOrUpdateUserSort } = useUserSorts('Project')
 
 const isSuper = computed(() => orgRoles.value?.[OrgUserRoles.SUPER_ADMIN])
@@ -116,6 +121,8 @@ const isOwnerOrCreator = computed(() => {
 })
 
 const updateCollaborator = async (collab: any, roles: ProjectRoles) => {
+  if (isCurrentUser(collab)) return
+
   const currentCollaborator = collaborators.value.find((coll) => coll.id === collab.id)!
 
   try {
@@ -466,7 +473,14 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div v-if="column.key === 'role'">
-              <template v-if="isDeleteOrUpdateAllowed(record) && isOwnerOrCreator && accessibleRoles.includes(record.roles)">
+              <template
+                v-if="
+                  !isCurrentUser(record) &&
+                  isDeleteOrUpdateAllowed(record) &&
+                  isOwnerOrCreator &&
+                  accessibleRoles.includes(record.roles)
+                "
+              >
                 <RolesSelector
                   :role="record.roles"
                   :roles="accessibleRoles"
@@ -481,7 +495,13 @@ onBeforeUnmount(() => {
                 />
               </template>
               <template v-else>
-                <RolesBadge :border="false" :role="record.roles" />
+                <NcTooltip v-if="isCurrentUser(record)" class="w-fit">
+                  <template #title>
+                    {{ $t('tooltip.cannotChangeOwnRole') }}
+                  </template>
+                  <RolesBadge :border="false" :role="record.roles" />
+                </NcTooltip>
+                <RolesBadge v-else :border="false" :role="record.roles" />
               </template>
             </div>
             <div v-if="column.key === 'created_at'">

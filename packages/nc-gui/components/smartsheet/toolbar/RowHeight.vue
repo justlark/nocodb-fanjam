@@ -58,7 +58,7 @@ const updateRowHeight = async (rh: number, undo = false) => {
     }
 
     try {
-      if (!isPublic.value && !isSharedBase.value && isUIAllowed('viewCreateOrEdit')) {
+      if (!isPublic.value && !isSharedBase.value && isUIAllowed('rowHeightUpdate')) {
         await updateViewMeta(view.value.id, ViewTypes.GRID, {
           row_height: rh,
         })

@@ -15,24 +15,6 @@ test.describe('Command Shortcuts', () => {
     await unsetup(context);
   });
 
-  test('Verify Command J Docs', async ({ page }) => {
-    await page.waitForTimeout(1000);
-    await dashboard.cmdJ.openCmdJ();
-
-    await expect(dashboard.cmdJ.get()).toBeVisible();
-
-    await dashboard.cmdJ.searchText('Column');
-    await page.keyboard.press('Escape');
-    await expect(dashboard.cmdJ.get()).toBeHidden();
-
-    await dashboard.signOut();
-
-    await page.waitForTimeout(2000);
-
-    await dashboard.cmdJ.openCmdJ();
-    await expect(dashboard.cmdJ.get()).toBeHidden();
-  });
-
   test('Verify Command K', async ({ page }) => {
     await page.waitForTimeout(1000);
     await dashboard.cmdK.openCmdK();

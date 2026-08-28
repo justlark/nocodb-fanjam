@@ -286,9 +286,6 @@ importers:
       turndown:
         specifier: ^7.2.0
         version: 7.2.0
-      typesense:
-        specifier: ^2.0.3
-        version: 2.0.3(@babel/runtime@7.27.3)
       unified:
         specifier: ^11.0.5
         version: 11.0.5
@@ -340,9 +337,6 @@ importers:
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
-      youtube-vue3:
-        specifier: ^0.1.15
-        version: 0.1.15(typescript@5.8.3)
     devDependencies:
       '@antfu/eslint-config':
         specifier: ^0.26.3

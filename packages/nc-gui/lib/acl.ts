@@ -30,6 +30,10 @@ const rolePermissions = {
       workspaceSettings: true,
       superAdminUserManagement: true,
       baseCreate: true,
+      // FanJam: gates the mini-sidebar "Create New" button. Declared in both the org
+      // and base scopes so org-level Creators keep it on the workspace home page,
+      // where no base roles are loaded. Editors and below never inherit it.
+      createNewMenu: true,
       baseMove: true,
       baseDelete: true,
       baseDuplicate: true,
@@ -56,6 +60,11 @@ const rolePermissions = {
   [ProjectRoles.CREATOR]: {
     include: {
       baseCreate: true,
+      // FanJam: see the org-scope declaration above.
+      createNewMenu: true,
+      // FanJam: gates the Data | Details switcher on table views. Editors and below
+      // have nothing actionable in Details, so the whole section is hidden from them.
+      detailsTab: true,
       fieldUpdate: true,
       hookList: true,
       hookCreate: true,
@@ -104,6 +113,7 @@ const rolePermissions = {
       filterSync: true,
       filterChildrenRead: true,
       viewFieldEdit: true,
+      rowHeightUpdate: true,
       csvTableImport: true,
       excelTableImport: true,
       hookTrigger: true,

@@ -510,7 +510,7 @@
       "orgLevelViewer": "Organization Level Viewer"
     },
     "sqlView": "SQL View",
-    "rowHeight": "Record Height",
+    "rowHeight": "Row Height",
     "heightClass": {
       "short": "Short",
       "medium": "Medium",

@@ -97,6 +97,10 @@ export const useViewsStore = defineStore('viewsStore', () => {
   })
 
   const openedViewsTab = computed<ViewPageType>(() => {
+    // FanJam: the Details section is hidden from Editors and below. Pinning the tab here
+    // is the single choke point - it also blocks direct navigation to a Details sub-tab URL.
+    if (!isUIAllowed('detailsTab')) return 'view'
+
     // For types in ViewPageType type
     if (!route.value.params?.slugs || route.value.params.slugs?.length <= 1) return 'view'
 

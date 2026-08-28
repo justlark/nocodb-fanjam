@@ -134,7 +134,7 @@ const hasDashboardCreateAccess = computed(() => {
 </script>
 
 <template>
-  <div v-if="!isSharedBase" class="nc-mini-sidebar-btn-full-width">
+  <div v-if="!isSharedBase && isUIAllowed('createNewMenu')" class="nc-mini-sidebar-btn-full-width">
     <NcDropdown v-model:visible="isVisibleCreateNew" placement="right" overlay-class-name="!min-w-48">
       <div class="w-full py-1 flex items-center justify-center">
         <div

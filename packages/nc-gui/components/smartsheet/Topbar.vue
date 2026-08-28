@@ -59,7 +59,7 @@ const topbarBreadcrumbItemWidth = computed(() => {
         <LazySmartsheetTopbarDashboardInfo v-if="!isPublic && activeDashboardId" />
       </div>
 
-      <div v-if="!isSharedBase && !isMobileMode && !activeAutomationId && !activeDashboardId">
+      <div v-if="!isSharedBase && !isMobileMode && !activeAutomationId && !activeDashboardId && isUIAllowed('detailsTab')">
         <SmartsheetTopbarSelectMode />
       </div>
       <div v-else-if="activeDashboardId">

@@ -214,7 +214,6 @@ export function useCopyPaste({
       isViewSearchActive() ||
       isSidebarNodeRenameActive() ||
       isActiveElementInsideExtension() ||
-      isCmdJActive() ||
       cmdKActive()
     ) {
       return

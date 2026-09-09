@@ -89,7 +89,7 @@ function navigateForgotPassword() {
         <div
           class="bg-white md:mt-[60px] relative flex flex-col justify-center gap-2 w-full max-w-[500px] mx-auto p-8 md:(rounded-lg border-1 border-gray-200 shadow-xl)"
         >
-          <LazyGeneralBrandIcon class="color-transition hover:(ring ring-accent ring-opacity-100)" />
+          <LazyGeneralBrandIcon />
 
           <h1 class="prose-2xl font-bold self-center my-4">{{ $t('general.signIn') }}</h1>
 

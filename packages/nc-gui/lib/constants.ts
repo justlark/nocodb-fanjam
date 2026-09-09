@@ -10,6 +10,14 @@ export const MAX_WIDTH_FOR_MOBILE_MODE = 480
 
 export const BASE_FALLBACK_URL = process.env.NODE_ENV === 'production' ? '..' : 'http://localhost:8080'
 
+export const FANJAM_URL = 'https://fanjam.live'
+
+// The unpadded mark, for use as a standalone logo alongside text.
+export const FANJAM_ICON_URL = `${FANJAM_URL}/icons/icon.png`
+
+// The same mark with transparent margin, for use in fixed-size icon slots.
+export const FANJAM_ICON_PADDED_URL = `${FANJAM_URL}/icons/icon-padded.png`
+
 export const GROUP_BY_VARS = {
   NULL: '__nc_null__',
   TRUE: '__nc_true__',

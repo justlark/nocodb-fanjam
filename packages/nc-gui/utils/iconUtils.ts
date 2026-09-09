@@ -223,9 +223,6 @@ import NcGitCommit from '~icons/nc-icons/git-commit'
 import NcCircle from '~icons/nc-icons/circle'
 import NcServer1 from '~icons/nc-icons/server1'
 import NcThumbsUpOutline from '~icons/nc-icons/thumbs-up-outline'
-import NcNocoDB from '~icons/nc-icons/nocodb'
-import NcNocoDB1 from '~icons/nc-icons/nocodb1'
-import NcNocoDBSquarePuck from '~icons/nc-icons/nocodb-square-puck'
 
 // Sync data
 import NcAppleSolid from '~icons/nc-icons/apple_solid'
@@ -946,6 +943,14 @@ import NcSupportAgent from '~icons/nc-icons-v2/support-agent'
   heightExtra: NcIconsRowHeightExtraTall,
 } as const */
 
+// The FanJam mark, served from fanjam.live rather than bundled. Sized by the caller's
+// `w-*`/`h-*` classes, the same way the brand SVGs it replaced were.
+const fanJamIcon = h('img', {
+  src: FANJAM_ICON_PADDED_URL,
+  alt: 'FanJam',
+  class: 'inline-block object-contain',
+})
+
 export const iconMap = {
   'calendar': NcCalendarViewIcon,
   'grid': NcGridViewIcon,
@@ -1000,9 +1005,9 @@ export const iconMap = {
   'cellAi': h(NcCellAi, { stroke: 'transparent' }),
   'camera': NcCamera,
   'megaPhone': NcMegaPhone,
-  'nocodb': h(NcNocoDB, { stroke: 'transparent' }),
-  'nocodb1': h(NcNocoDB1, { stroke: 'transparent' }),
-  'nocodbSquarePuck': h(NcNocoDBSquarePuck, { stroke: 'transparent' }),
+  'nocodb': fanJamIcon,
+  'nocodb1': fanJamIcon,
+  'nocodbSquarePuck': fanJamIcon,
   'bulb': NcBulb,
   'snow': NcSnow,
 

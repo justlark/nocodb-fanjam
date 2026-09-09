@@ -31,17 +31,10 @@ const { appInfo } = useGlobal()
         data-testid="nc-workspace-menu"
         class="flex items-center nc-workspace-menu overflow-hidden py-1.25 pr-0.25 justify-center w-full ml-2"
       >
-        <a
-          class="transition-all duration-200 transform w-24 min-w-10"
-          href="https://fanjam.live"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <NcTooltip :disabled="!appInfo?.version || isEeUI">
-            <template #title>{{ appInfo?.version }}</template>
-            <img alt="FanJam" src="~/assets/img/brand/nocodb.png" />
-          </NcTooltip>
-        </a>
+        <NcTooltip :disabled="!appInfo?.version || isEeUI">
+          <template #title>{{ appInfo?.version }}</template>
+          <GeneralBrandWordmark />
+        </NcTooltip>
         <div class="flex flex-grow"></div>
       </div>
     </div>

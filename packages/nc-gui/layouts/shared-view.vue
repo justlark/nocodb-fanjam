@@ -64,14 +64,7 @@ export default {
           class="nc-table-topbar flex items-center justify-between !bg-transparent !px-3 !py-2 border-b-1 border-gray-200 !h-[46px]"
         >
           <div class="flex items-center gap-6 h-7 max-w-[calc(100%_-_280px)] xs:max-w-[calc(100%_-_90px)]">
-            <a
-              class="transition-all duration-200 cursor-pointer transform hover:scale-105"
-              href="https://fanjam.live"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img width="96" alt="FanJam" src="~/assets/img/brand/nocodb.png" class="flex-none min-w-[96px]" />
-            </a>
+            <GeneralBrandWordmark class="flex-none" />
 
             <div class="flex items-center gap-2 text-gray-900 text-sm truncate">
               <template v-if="isLoading">
@@ -102,10 +95,6 @@ export default {
 
           <div class="flex items-center gap-3">
             <LazySmartsheetToolbarExport v-if="allowCSVDownload" />
-
-            <a href="https://app.nocodb.com/#/signin" target="_blank" class="!no-underline xs:hidden" rel="noopener">
-              <NcButton size="xs"> {{ $t('labels.signUpForFree') }} </NcButton>
-            </a>
           </div>
         </a-layout-header>
         <NcFullScreen v-model="isFullScreen" class="h-full" :page-only="true">

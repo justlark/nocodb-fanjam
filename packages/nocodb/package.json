@@ -1,6 +1,6 @@
 {
   "name": "nocodb",
-  "version": "0.265.0",
+  "private": true,
   "pnpm": {
     "overrides": {
       "lru-cache": "< 11.2.0"

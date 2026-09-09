@@ -61,8 +61,8 @@ export default defineNuxtConfig({
       link: [
         {
           rel: 'icon',
-          type: 'image/x-icon',
-          href: './favicon.ico',
+          type: 'image/png',
+          href: 'https://fanjam.live/icons/icon.png',
         },
 
         ...(process.env.NC_CDN_URL
@@ -100,7 +100,7 @@ export default defineNuxtConfig({
         },
         { hid: 'og:url', property: 'og:url', content: 'https://fanjam.live' },
         // Twitter
-        { hid: 'twitter:card', name: 'twitter:card', content: 'summary_large_image' },
+        { hid: 'twitter:card', name: 'twitter:card', content: 'summary' },
         { hid: 'twitter:title', name: 'twitter:title', content: 'FanJam' },
         {
           hid: 'twitter:description',
@@ -110,12 +110,12 @@ export default defineNuxtConfig({
         {
           hid: 'twitter:image',
           name: 'twitter:image',
-          content: './link-preview.webp',
+          content: 'https://fanjam.live/icons/icon-padded.png',
         },
         {
           hid: 'og:image',
           property: 'og:image',
-          content: './link-preview.webp',
+          content: 'https://fanjam.live/icons/icon-padded.png',
         },
       ],
     },

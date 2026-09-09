@@ -6,7 +6,7 @@ interface Props {
 
 const { disabled, isViewToolbar } = defineProps<Props>()
 
-const { isMobileMode, getMainUrl } = useGlobal()
+const { isMobileMode } = useGlobal()
 
 const { visibility, showShareModal } = storeToRefs(useShare())
 
@@ -17,8 +17,6 @@ const { base, isSharedBase } = storeToRefs(useBase())
 const { $e } = useNuxtApp()
 
 const { isUIAllowed } = useRoles()
-
-const route = useRoute()
 
 useEventListener(document, 'keydown', async (e: KeyboardEvent) => {
   const cmdOrCtrl = isMac() ? e.metaKey : e.ctrlKey
@@ -35,11 +33,6 @@ useEventListener(document, 'keydown', async (e: KeyboardEvent) => {
     }
   }
 })
-
-const copySharedBase = async () => {
-  const baseUrl = getMainUrl()
-  window.open(`${baseUrl || ''}#/copy-shared-base?base=${route.params.baseId}`, '_blank', 'noopener,noreferrer')
-}
 </script>
 
 <template>
@@ -69,24 +62,6 @@ const copySharedBase = async () => {
       <GeneralIcon v-else icon="mobileShare" />
     </NcButton>
   </div>
-
-  <template v-else-if="isSharedBase">
-    <div class="flex-1"></div>
-    <div class="flex flex-col justify-center h-full">
-      <div class="flex flex-row items-center w-full">
-        <NcButton
-          class="z-10 !rounded-lg !px-2 !bg-[#ff133e]"
-          size="small"
-          type="primary"
-          :disabled="disabled"
-          @click="copySharedBase"
-        >
-          <GeneralIcon class="mr-1" icon="duplicate" />
-          Copy Base
-        </NcButton>
-      </div>
-    </div>
-  </template>
 
   <LazyDlgShareAndCollaborateView :is-view-toolbar="isViewToolbar" />
 </template>

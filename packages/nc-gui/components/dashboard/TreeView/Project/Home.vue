@@ -79,14 +79,7 @@ const hasTableCreatePermission = computed(() => {
             data-testid="nc-workspace-menu"
             class="flex items-center nc-workspace-menu overflow-hidden py-1.25 pr-0.25 justify-center w-full"
           >
-            <a
-              class="w-24 min-w-10 transition-all duration-200 p-1 transform"
-              href="https://fanjam.live"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img alt="FanJam" src="~/assets/img/brand/nocodb.png" />
-            </a>
+            <GeneralBrandWordmark class="p-1" />
 
             <div class="flex flex-grow"></div>
           </div>

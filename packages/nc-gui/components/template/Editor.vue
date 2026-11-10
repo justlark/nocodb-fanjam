@@ -220,6 +220,17 @@ const formError = ref()
 
 const srcDestMapping = ref<Record<string, Record<string, any>[]>>({})
 
+// When enabled, CSV rows whose value in `mergeKeyColumn` matches an existing
+// record update that record instead of being appended as a new one.
+const mergeRecords = ref(false)
+
+// Title of the destination column used to match CSV rows to existing records.
+const mergeKeyColumn = ref<string | undefined>()
+
+// Only columns that can be picked in the mapping dropdown can be used as the
+// merge key, since the key has to be mapped from a CSV column.
+const mergeKeyCandidates = computed(() => columns.value.filter((c) => !c.linkInfo && !c.readonly))
+
 const data = reactive<{
   title: string | null
   name: string
@@ -367,13 +378,16 @@ const importError = ref('')
 const formRef = ref()
 
 watch(
-  [() => srcDestMapping.value],
+  [() => srcDestMapping.value, mergeRecords, mergeKeyColumn],
   () => {
     let res = true
     if (importDataOnly) {
       for (const tn of Object.keys(srcDestMapping.value)) {
         let flag = false
         if (atLeastOneEnabledValidation(tn)) {
+          res = false
+        }
+        if (mergeKeyValidation(tn)) {
           res = false
         }
         for (const record of srcDestMapping.value[tn]) {
@@ -406,6 +420,9 @@ onMounted(() => {
 
   if (importDataOnly) {
     mapDefaultColumns()
+
+    // Default the merge key to the table's display column
+    mergeKeyColumn.value = (mergeKeyCandidates.value.find((c) => c.pv) ?? mergeKeyCandidates.value[0])?.title
   }
 
   nextTick(() => {
@@ -539,6 +556,20 @@ function atLeastOneEnabledValidation(tn: string, showError = false) {
 
     return true
   }
+  return false
+}
+
+function mergeKeyValidation(tn: string) {
+  if (!mergeRecords.value) return false
+
+  const isMapped =
+    !!mergeKeyColumn.value &&
+    (srcDestMapping.value[tn] || []).some((r: Record<string, any>) => r.enabled && r.destCn === mergeKeyColumn.value)
+
+  if (!isMapped) {
+    return t('msg.error.mergeFieldNotMapped', { field: mergeKeyColumn.value ?? '' })
+  }
+
   return false
 }
 
@@ -710,6 +741,12 @@ const W_LOOKUP_VALUE = 1
 const W_CREATE_MISSING = 3
 const W_INSERT_ROW = 0.5
 const W_LINK_OP = 2
+// Merge-mode costs. W_UPDATE_ROW must not exceed W_INSERT_ROW and
+// W_LINK_REPLACE must not be less than W_LINK_OP: the merge budget is sized as
+// an upper bound before rows are matched, then the unused part is credited.
+const W_MATCH_PAGE = 2
+const W_UPDATE_ROW = 0.5
+const W_LINK_REPLACE = 3
 
 // Beyond this many rows in the related table we stop trying to pull its whole
 // display-value -> pk map down and fall back to one lookup per unique value.
@@ -722,13 +759,18 @@ const LINK_CONCURRENCY = 16
 const PHASE_LINKS = 'Resolving links…'
 const PHASE_RECORDS = 'Inserting records…'
 const PHASE_LINKING = 'Linking records…'
+const PHASE_MATCHING = 'Matching existing records…'
+const PHASE_UPDATING = 'Updating records…'
 
-// Keys a display value can be matched under. The raw trimmed string first, plus
-// a numeric key so that "3.0" in the file still matches a `3` in the table —
-// the server-side `eq` we used to lean on did that coercion for us.
-function linkValueKeys(raw: any): string[] {
+// Keys a value can be matched under, used both to resolve link display values
+// and to match CSV rows to existing records when merging. The raw trimmed
+// string first, plus a numeric key so that "3.0" in the file still matches a
+// `3` in the table — the server-side `eq` we used to lean on did that coercion
+// for us. Booleans map to "1"/"0" to line up with transformCsvValue's output
+// for Checkbox columns.
+function valueMatchKeys(raw: any): string[] {
   if (raw == null) return []
-  const s = String(raw).trim()
+  const s = typeof raw === 'boolean' ? (raw ? '1' : '0') : String(raw).trim()
   if (!s.length) return []
   const n = Number(s)
   return Number.isFinite(n) ? [s, `#num:${n}`] : [s]
@@ -781,6 +823,22 @@ async function importOneTableData({
   const rows: Record<string, any>[] = importData[srcTableName]
   const total = rows.length
 
+  const leftPkCols = (meta.value?.columns ?? []).filter((c) => c.pk) as ColumnType[]
+  const leftPkCol = leftPkCols[0]
+
+  const isMerging = mergeRecords.value
+  const mergeKeyMapping = isMerging ? regularMappings.find(({ mapping }) => mapping.destCn === mergeKeyColumn.value) : undefined
+
+  if (isMerging) {
+    if (!mergeKeyMapping) {
+      throw new Error(t('msg.error.mergeFieldNotMapped', { field: mergeKeyColumn.value ?? '' }))
+    }
+    // Updates are addressed by primary key, so we need exactly one.
+    if (leftPkCols.length !== 1 || !leftPkCol?.title) {
+      throw new Error(t('msg.error.mergeRequiresSinglePrimaryKey'))
+    }
+  }
+
   // Precompute — split every link cell up front. This is pure CPU work, and it
   // lets us size the whole job (lookups + inserts + link calls) before issuing a
   // single request, so the progress bar never has to move backwards.
@@ -831,6 +889,18 @@ async function importOneTableData({
     }),
   )
 
+  // When merging, size the scan of this table's merge key -> pk map.
+  let matchPages = 0
+  if (isMerging) {
+    try {
+      const res = (await $api.dbDataTableRow.count(tableId)) as any
+      const count = Number(res?.count)
+      matchPages = Number.isFinite(count) ? Math.max(1, Math.ceil(count / LINK_MAP_PAGE_SIZE)) : 1
+    } catch {
+      matchPages = 1
+    }
+  }
+
   let totalWeight = 0
   for (const plan of linkPlans) {
     const pages = prefetchPages.get(plan.linkInfo.relatedModelId)
@@ -840,8 +910,16 @@ async function importOneTableData({
     // out not to be we credit it anyway so the bar keeps moving.
     totalWeight += W_CREATE_MISSING
   }
-  totalWeight += total * W_INSERT_ROW
-  totalWeight += estimatedLinkOps * W_LINK_OP
+  if (isMerging) {
+    // We don't know yet which rows will be inserted and which updated, so budget
+    // for the worst case per row and credit the difference after matching.
+    totalWeight += matchPages * W_MATCH_PAGE
+    totalWeight += total * W_INSERT_ROW
+    totalWeight += total * linkPlans.length * W_LINK_REPLACE
+  } else {
+    totalWeight += total * W_INSERT_ROW
+    totalWeight += estimatedLinkOps * W_LINK_OP
+  }
   if (totalWeight <= 0) totalWeight = 1
 
   let doneWeight = 0
@@ -851,7 +929,77 @@ async function importOneTableData({
     updateImportTips(baseId, srcTableName, doneWeight, totalWeight)
   }
 
-  report(0, linkPlans.length ? PHASE_LINKS : PHASE_RECORDS)
+  report(0, isMerging ? PHASE_MATCHING : linkPlans.length ? PHASE_LINKS : PHASE_RECORDS)
+
+  // Phase 0 — when merging, split the CSV rows into those whose merge key
+  // matches existing records (they update every matching record) and those
+  // that match nothing (they are inserted, as without merging).
+  let insertIdxs: number[] = rows.map((_, idx) => idx)
+  // Existing record pk -> index of the CSV row whose values it receives. If
+  // several CSV rows match the same record, the last one wins.
+  const updateTargets = new Map<any, number>()
+
+  if (isMerging && mergeKeyMapping && leftPkCol?.title) {
+    const keyCol = mergeKeyMapping.destCol
+    const keyTitle = keyCol.title as string
+    const keyPkMap = new Map<string, any[]>()
+
+    let offset = 0
+    for (let page = 0; ; page++) {
+      const res = (await $api.dbDataTableRow.list(tableId, {
+        fields: [...new Set([keyTitle, leftPkCol.title])],
+        limit: LINK_MAP_PAGE_SIZE,
+        offset,
+      } as any)) as any
+      const list = (res?.list ?? []) as Record<string, any>[]
+
+      for (const found of list) {
+        const pk = extractRowPk(found, leftPkCol)
+        if (pk == null) continue
+        for (const key of valueMatchKeys(found[keyTitle])) {
+          const pks = keyPkMap.get(key)
+          if (pks) pks.push(pk)
+          else keyPkMap.set(key, [pk])
+        }
+      }
+
+      if (page < matchPages) report(W_MATCH_PAGE)
+      offset += LINK_MAP_PAGE_SIZE
+
+      if (res?.pageInfo?.isLastPage || !list.length) {
+        // Credit the pages the row count made us budget for but we did not need.
+        report(Math.max(0, matchPages - page - 1) * W_MATCH_PAGE)
+        break
+      }
+    }
+
+    insertIdxs = []
+    rows.forEach((row, idx) => {
+      const value = transformCsvValue(row[mergeKeyMapping.mapping.srcCn], keyCol)
+      const pks = valueMatchKeys(value)
+        .map((key) => keyPkMap.get(key))
+        .find((v) => !!v?.length)
+      if (pks) {
+        for (const pk of pks) updateTargets.set(pk, idx)
+      } else {
+        insertIdxs.push(idx)
+      }
+    })
+
+    // Now that the split is known, credit the part of the worst-case budget
+    // we will not use.
+    let insertLinkOps = 0
+    for (const plan of linkPlans) {
+      for (const idx of insertIdxs) if (plan.rowPieces[idx]?.length) insertLinkOps++
+    }
+    const budgeted = total * W_INSERT_ROW + total * linkPlans.length * W_LINK_REPLACE
+    const needed =
+      insertIdxs.length * W_INSERT_ROW +
+      updateTargets.size * W_UPDATE_ROW +
+      insertLinkOps * W_LINK_OP +
+      updateTargets.size * linkPlans.length * W_LINK_REPLACE
+    report(Math.max(0, budgeted - needed), linkPlans.length ? PHASE_LINKS : PHASE_RECORDS)
+  }
 
   // Phase A — resolve display value → right-table pk per link column.
   const linkValueMaps = new WeakMap<Record<string, any>, Map<string, any>>()
@@ -896,7 +1044,7 @@ async function importOneTableData({
       // legacy `where` parser, which cannot express values containing `(`, `)`
       // or the delimiter `,`.
       const wanted = new Set<string>()
-      for (const v of uniqueValues) for (const key of linkValueKeys(v)) wanted.add(key)
+      for (const v of uniqueValues) for (const key of valueMatchKeys(v)) wanted.add(key)
 
       const seen = new Map<string, any>()
       let offset = 0
@@ -910,7 +1058,7 @@ async function importOneTableData({
         } as any)) as any
 
         for (const found of (res?.list ?? []) as Record<string, any>[]) {
-          const keys = linkValueKeys(found?.[displayColTitle])
+          const keys = valueMatchKeys(found?.[displayColTitle])
           if (!keys.some((key) => wanted.has(key) && !seen.has(key))) continue
           const pk = extractRowPk(found, relPkCol)
           if (pk == null) continue
@@ -931,7 +1079,7 @@ async function importOneTableData({
       }
 
       for (const v of uniqueValues) {
-        for (const key of linkValueKeys(v)) {
+        for (const key of valueMatchKeys(v)) {
           const pk = seen.get(key)
           if (pk != null) {
             valuePkMap.set(v, pk)
@@ -977,28 +1125,29 @@ async function importOneTableData({
   // (the v1 bulk endpoint doesn't return PKs on mysql/sqlite). When there
   // are none, keep the existing v1 path so the no-link import behaviour
   // (operation-id audit chaining, etc.) is unchanged.
-  const leftPkCol = meta.value?.columns?.find((c) => c.pk) as ColumnType | undefined
   const useV2 = linkPlans.length > 0
   const insertedLeft: Array<{ leftPk: any; rowIdx: number }> = []
   let operationId: any
 
+  const buildRowData = (row: Record<string, any>) =>
+    regularMappings.reduce((acc: Record<string, any>, { mapping, destCol }) => {
+      acc[mapping.destCn] = transformCsvValue(row[mapping.srcCn], destCol)
+      return acc
+    }, {})
+
   report(0, PHASE_RECORDS)
 
-  for (let i = 0; i < total; i += maxRowsToParse) {
-    const batchSlice = rows.slice(i, i + maxRowsToParse)
-    const batchData = batchSlice.map((row) =>
-      regularMappings.reduce((acc: Record<string, any>, { mapping, destCol }) => {
-        acc[mapping.destCn] = transformCsvValue(row[mapping.srcCn], destCol)
-        return acc
-      }, {}),
-    )
+  // Without merging, insertIdxs is every row, in order.
+  for (let i = 0; i < insertIdxs.length; i += maxRowsToParse) {
+    const batchIdxs = insertIdxs.slice(i, i + maxRowsToParse)
+    const batchData = batchIdxs.map((rowIdx) => buildRowData(rows[rowIdx]))
 
     if (useV2) {
       const inserted = (await $api.dbDataTableRow.create(tableId, batchData)) as any
       const insertedArr: any[] = Array.isArray(inserted) ? inserted : [inserted]
-      for (let j = 0; j < batchSlice.length; j++) {
+      for (let j = 0; j < batchIdxs.length; j++) {
         const leftPk = extractRowPk(insertedArr[j], leftPkCol)
-        insertedLeft.push({ leftPk, rowIdx: i + j })
+        insertedLeft.push({ leftPk, rowIdx: batchIdxs[j] })
       }
     } else {
       const res = await $api.dbTableRow.bulkCreate(
@@ -1023,15 +1172,40 @@ async function importOneTableData({
       operationId = res.headers?.['nc-operation-id']
     }
 
-    report(batchSlice.length * W_INSERT_ROW)
+    report(batchIdxs.length * W_INSERT_ROW)
     if (autoInsertOption.value) {
       await getMeta(tableId, true)
     }
   }
 
+  // Phase B2 — when merging, overwrite the mapped fields of every matched
+  // record with the values from its CSV row.
+  const updatedLeft: Array<{ leftPk: any; rowIdx: number }> = [...updateTargets].map(([leftPk, rowIdx]) => ({
+    leftPk,
+    rowIdx,
+  }))
+
+  if (updatedLeft.length && leftPkCol?.title) {
+    report(0, PHASE_UPDATING)
+
+    for (let i = 0; i < updatedLeft.length; i += maxRowsToParse) {
+      const batch = updatedLeft.slice(i, i + maxRowsToParse)
+      const batchData = batch.map(({ leftPk, rowIdx }) => ({
+        ...buildRowData(rows[rowIdx]),
+        [leftPkCol.title!]: leftPk,
+      }))
+
+      await $api.dbDataTableRow.update(tableId, batchData)
+
+      report(batch.length * W_UPDATE_ROW)
+    }
+  }
+
+  const result = { inserted: insertIdxs.length, updated: updatedLeft.length }
+
   if (!linkPlans.length) {
     report(totalWeight)
-    return
+    return result
   }
 
   // Phase C — link left rows to right rows. One nestedLink call per
@@ -1070,9 +1244,79 @@ async function importOneTableData({
     () => report(W_LINK_OP),
   )
 
+  // Phase C2 — for updated records, make each link field hold exactly the
+  // records named in the CSV: unlink what is no longer listed and link what is
+  // new. An empty cell clears the field, the same as for regular fields.
+  type ReplaceOp = { leftPk: any; plan: (typeof linkPlans)[number]; desired: any[] }
+  const replaceOps: ReplaceOp[] = []
+
+  for (const { leftPk, rowIdx } of updatedLeft) {
+    for (const plan of linkPlans) {
+      const valueMap = linkValueMaps.get(plan.mapping)
+      if (!valueMap) continue
+      const pieces = plan.rowPieces[rowIdx] ?? []
+      const desired = Array.from(new Set(pieces.map((v) => valueMap.get(v)).filter((v) => v != null && v !== '')))
+      replaceOps.push({ leftPk, plan, desired })
+    }
+  }
+
+  await runConcurrent(
+    replaceOps,
+    LINK_CONCURRENCY,
+    async ({ leftPk, plan, desired }) => {
+      const linkColumnId = plan.destCol.id as string
+      const rowId = encodeURIComponent(String(leftPk))
+      const relMeta = metas.value?.[plan.linkInfo.relatedModelId] as TableType | undefined
+      const relPkCol = relMeta?.columns?.find((c) => c.pk) as ColumnType | undefined
+
+      const existing = await listLinkedPks(tableId, linkColumnId, rowId, relPkCol)
+
+      const desiredKeys = new Set(desired.map(String))
+      const existingKeys = new Set(existing.map(String))
+      const toUnlink = existing.filter((pk) => !desiredKeys.has(String(pk)))
+      const toLink = desired.filter((pk) => !existingKeys.has(String(pk)))
+
+      if (toUnlink.length) await $api.dbDataTableRow.nestedUnlink(tableId, linkColumnId, rowId, toUnlink)
+      if (toLink.length) await $api.dbDataTableRow.nestedLink(tableId, linkColumnId, rowId, toLink)
+    },
+    () => report(W_LINK_REPLACE),
+  )
+
   // Estimated link ops are an upper bound (rows whose values all resolved to
   // nothing are dropped), so settle the bar on 100%.
   report(totalWeight)
+
+  return result
+}
+
+// Primary keys of every record currently linked to `rowId` through a link
+// column. The nested list endpoint returns `{ list, pageInfo }` for has-many
+// and many-to-many links, and a single record (or null) for belongs-to; for
+// one-to-one `list` itself can be a single record.
+async function listLinkedPks(tableId: string, linkColumnId: string, rowId: string, relPkCol: ColumnType | undefined) {
+  const pks: any[] = []
+  let offset = 0
+
+  while (true) {
+    const res = (await $api.dbDataTableRow.nestedList(tableId, linkColumnId, rowId, {
+      limit: LINK_MAP_PAGE_SIZE,
+      offset,
+    })) as any
+
+    const isPaged = !!res && typeof res === 'object' && 'pageInfo' in res
+    const raw = isPaged ? res.list : res
+    const records: Record<string, any>[] = Array.isArray(raw) ? raw : raw ? [raw] : []
+
+    for (const record of records) {
+      const pk = extractRowPk(record, relPkCol)
+      if (pk != null) pks.push(pk)
+    }
+
+    if (!isPaged || !Array.isArray(res.list) || !records.length || res.pageInfo?.isLastPage) break
+    offset += LINK_MAP_PAGE_SIZE
+  }
+
+  return [...new Set(pks)]
 }
 
 async function importTemplate() {
@@ -1095,22 +1339,30 @@ async function importTemplate() {
       const baseId = base.value.id!
       const table_names = data.tables.map((t: Record<string, any>) => t.table_name)
 
-      await Promise.all(
-        Object.keys(importData).map((key: string) =>
-          (async (k) => {
-            if (!table_names.includes(k)) {
-              return
-            }
-            await importOneTableData({ srcTableName: k, tableId: tableId!, baseId })
-          })(key),
-        ),
-      )
+      const srcTableNames = Object.keys(importData).filter((k) => table_names.includes(k))
+      const totals = { inserted: 0, updated: 0 }
+      const addTotals = (res: { inserted: number; updated: number }) => {
+        totals.inserted += res.inserted
+        totals.updated += res.updated
+      }
+
+      if (mergeRecords.value) {
+        // Import files one after another when merging, so a later file can
+        // match records inserted by an earlier one instead of duplicating them.
+        for (const k of srcTableNames) {
+          addTotals(await importOneTableData({ srcTableName: k, tableId: tableId!, baseId }))
+        }
+      } else {
+        await Promise.all(
+          srcTableNames.map(async (k) => addTotals(await importOneTableData({ srcTableName: k, tableId: tableId!, baseId }))),
+        )
+      }
 
       // reload table
       reloadHook.trigger()
 
       // Successfully imported table data
-      message.success(t('msg.success.tableDataImported'))
+      message.success(mergeRecords.value ? t('msg.success.tableDataMerged', totals) : t('msg.success.tableDataImported'))
     } catch (e: any) {
       console.log(e)
       throw e
@@ -1390,6 +1642,12 @@ function getErrorByTableName(tableName: string) {
     errors.push(missingRequiredColumnsValidationErr)
   }
 
+  const mergeKeyValidationErr = mergeKeyValidation(tableName)
+
+  if (mergeKeyValidationErr) {
+    errors.push(mergeKeyValidationErr)
+  }
+
   return errors
 }
 </script>
@@ -1609,6 +1867,50 @@ function getErrorByTableName(tableName: string) {
           </div>
         </a-collapse-panel>
       </a-collapse>
+
+      <div class="nc-import-merge-records pt-4 pr-2 flex items-center gap-3">
+        <label class="flex items-center flex-none cursor-pointer">
+          <NcCheckbox v-model:checked="mergeRecords" class="nc-import-merge-records-checkbox" :disabled="isImporting" />
+          <span class="ml-2">{{ $t('labels.mergeRecords') }}</span>
+        </label>
+
+        <div class="flex-1 min-w-0 flex items-center gap-2 justify-end">
+          <span
+            class="flex-none text-small"
+            :class="mergeRecords ? 'text-nc-content-gray-subtle2' : 'text-nc-content-gray-muted'"
+          >
+            {{ $t('labels.mergeRecordsBy') }}
+          </span>
+          <NcSelect
+            v-model:value="mergeKeyColumn"
+            class="nc-import-merge-key-select w-[220px] nc-select-shadow"
+            show-search
+            :disabled="!mergeRecords || isImporting"
+            :placeholder="$t('labels.mergeRecordsBy')"
+            :filter-option="filterOption"
+            dropdown-class-name="nc-dropdown-merge-key-field"
+          >
+            <template #suffixIcon>
+              <GeneralIcon icon="arrowDown" class="text-current" />
+            </template>
+            <a-select-option v-for="col of mergeKeyCandidates" :key="col.id" :value="col.title">
+              <div class="flex items-center gap-2 w-full">
+                <SmartsheetHeaderIcon :column="col" class="flex-none w-3.5 h-3.5 !mx-0" color="text-nc-content-gray-muted" />
+                <NcTooltip class="truncate flex-1" show-on-truncate-only>
+                  <template #title>{{ col.title }}</template>
+                  {{ col.title }}
+                </NcTooltip>
+                <component
+                  :is="iconMap.check"
+                  v-if="mergeKeyColumn === col.title"
+                  id="nc-selected-item-icon"
+                  class="flex-none text-primary w-4 h-4"
+                />
+              </div>
+            </a-select-option>
+          </NcSelect>
+        </div>
+      </div>
 
       <div v-if="isEeUI" class="pt-4 pr-2">
         <label class="flex">

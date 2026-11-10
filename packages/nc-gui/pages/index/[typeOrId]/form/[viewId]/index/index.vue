@@ -104,7 +104,7 @@ const { message: templatedMessage } = useTemplatedMessage(
 <template>
   <div class="h-full flex flex-col items-center w-full max-w-[max(33%,688px)] mx-auto">
     <GeneralFormBanner
-      v-if="sharedFormView && !parseProp(sharedFormView?.meta).hide_banner"
+      v-if="sharedFormView && !FORM_ALWAYS_HIDE_BANNER && !parseProp(sharedFormView?.meta).hide_banner"
       :banner-image-url="sharedFormView.banner_image_url"
       class="flex-none dark:border-none"
     />
@@ -303,7 +303,7 @@ const { message: templatedMessage } = useTemplatedMessage(
               </div>
             </a-form>
           </div>
-          <div>
+          <div v-if="!FORM_ALWAYS_HIDE_BRANDING && !parseProp(sharedFormView?.meta).hide_branding">
             <a-divider class="!my-6 !md:my-8" />
             <div class="inline-block">
               <GeneralFormBranding />

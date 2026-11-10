@@ -279,7 +279,7 @@ const { message: templatedMessage } = useTemplatedMessage(
       <div v-if="sharedFormView" class="my-auto z-2">
         <template v-if="!isStarted || submitted">
           <GeneralFormBanner
-            v-if="sharedFormView && !parseProp(sharedFormView?.meta).hide_banner"
+            v-if="sharedFormView && !FORM_ALWAYS_HIDE_BANNER && !parseProp(sharedFormView?.meta).hide_banner"
             :banner-image-url="sharedFormView.banner_image_url"
             class="flex-none mb-4"
           />
@@ -509,7 +509,7 @@ const { message: templatedMessage } = useTemplatedMessage(
       </div>
       <div class="lg:(absolute bottom-0 right-0 px-4 pb-4) lg:px-10 lg:pb-10">
         <div class="flex justify-end items-center gap-4 nc-survey-form-branding">
-          <div class="flex justify-center">
+          <div v-if="!FORM_ALWAYS_HIDE_BRANDING && !parseProp(sharedFormView?.meta).hide_branding" class="flex justify-center">
             <GeneralFormBranding
               class="inline-flex mx-auto"
               :style="{

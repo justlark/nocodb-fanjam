@@ -63,6 +63,10 @@ const isLocked = inject(IsLockedInj, ref(false))
 
 const isEditable = isUIAllowed('viewFieldEdit' as Permission)
 
+// Users who can't edit the form right now (no permission, or the view is locked) don't get the
+// settings sidebar or the logo upload controls at all.
+const canEditForm = computed(() => isEditable && !isLocked.value)
+
 const meta = inject(MetaInj, ref())
 
 const view = inject(ActiveViewInj, ref())
@@ -942,7 +946,7 @@ const { message: templatedMessage } = useTemplatedMessage(
       >
         <div class="max-w-[max(33%,688px)] mx-auto">
           <GeneralFormBanner
-            v-if="!parseProp(formViewData?.meta).hide_banner"
+            v-if="!FORM_ALWAYS_HIDE_BANNER && !parseProp(formViewData?.meta).hide_banner"
             :banner-image-url="formViewData?.banner_image_url"
           />
 
@@ -1023,7 +1027,7 @@ const { message: templatedMessage } = useTemplatedMessage(
           </div>
         </div>
         <template v-else-if="formViewData">
-          <SmartsheetFormLayout :is-sidebar-visible="isSidebarVisible">
+          <SmartsheetFormLayout :is-sidebar-visible="isSidebarVisible && canEditForm">
             <template #preview>
               <div
                 class="w-full h-full overflow-auto nc-form-scrollbar p-6"
@@ -1037,7 +1041,7 @@ const { message: templatedMessage } = useTemplatedMessage(
                   leave-from-class="opacity-0"
                   leave-to-class="opacity-0"
                 >
-                  <div v-show="!isSidebarVisible" class="absolute top-4 right-4 z-499">
+                  <div v-show="!isSidebarVisible && canEditForm" class="absolute top-4 right-4 z-499">
                     <NcTooltip placement="topRight" class="nc-sidebar-toggle-btn">
                       <template #title> {{ $t('activity.toggleSidebar') }}</template>
                       <NcButton icon-only size="small" type="secondary" @click.stop="isSidebarVisible = true">
@@ -1068,7 +1072,10 @@ const { message: templatedMessage } = useTemplatedMessage(
                     @submit="handleOnUploadImage"
                   ></GeneralImageCropper>
                   <!-- cover image -->
-                  <div v-if="!parseProp(formViewData?.meta).hide_banner" class="group relative max-w-[max(33%,688px)] mx-auto">
+                  <div
+                    v-if="!FORM_ALWAYS_HIDE_BANNER && !parseProp(formViewData?.meta).hide_banner"
+                    class="group relative max-w-[max(33%,688px)] mx-auto"
+                  >
                     <GeneralFormBanner
                       :key="formViewData.banner_image_url?.path"
                       :banner-image-url="formViewData.banner_image_url"
@@ -1170,12 +1177,14 @@ const { message: templatedMessage } = useTemplatedMessage(
                       <!-- form header -->
                       <div class="flex flex-col px-4 lg:px-6">
                         <!-- Form logo  -->
-                        <div class="mb-4">
+                        <div v-if="formViewData.logo_url || canEditForm" class="mb-4">
                           <div
                             class="nc-form-logo-wrapper mx-6 group relative h-56px overflow-hidden inline-flex items-center"
                             :class="
                               formViewData.logo_url
-                                ? 'max-w-189px hover:(w-full bg-gray-100 rounded-xl) '
+                                ? canEditForm
+                                  ? 'max-w-189px hover:(w-full bg-gray-100 rounded-xl) '
+                                  : 'max-w-189px'
                                 : 'bg-gray-100  rounded-xl'
                             "
                             style="transition: all 0.3s ease-in"
@@ -1188,6 +1197,7 @@ const { message: templatedMessage } = useTemplatedMessage(
                               :is-cell-preview="false"
                             />
                             <div
+                              v-if="canEditForm"
                               class="items-center space-x-1 flex-nowrap m-3"
                               :class="formViewData.logo_url ? 'hidden absolute top-0 left-0 group-hover:flex' : 'flex'"
                             >
@@ -1198,7 +1208,7 @@ const { message: templatedMessage } = useTemplatedMessage(
                                   </div>
                                 </template>
                                 <PaymentUpgradeBadgeProvider
-                                  v-if="isEditable"
+                                  v-if="canEditForm"
                                   :feature="PlanFeatureTypes.FEATURE_FORM_CUSTOM_LOGO"
                                 >
                                   <template #default="{ click }">
@@ -1561,7 +1571,7 @@ const { message: templatedMessage } = useTemplatedMessage(
                       </div>
                     </a-form>
 
-                    <div v-if="!parseProp(formViewData?.meta).hide_branding" class="px-8 lg:px-12">
+                    <div v-if="!FORM_ALWAYS_HIDE_BRANDING && !parseProp(formViewData?.meta).hide_branding" class="px-8 lg:px-12">
                       <a-divider class="!my-8" />
                       <!-- Nocodb Branding  -->
                       <div class="inline-block">
@@ -1578,7 +1588,6 @@ const { message: templatedMessage } = useTemplatedMessage(
                 class="nc-form-right-panel h-full flex-grow max-w-full"
                 :class="{
                   'overflow-y-auto nc-form-scrollbar': activeField,
-                  'relative': isLocked,
                 }"
               >
                 <!-- Form Field settings -->
@@ -1931,10 +1940,14 @@ const { message: templatedMessage } = useTemplatedMessage(
                             </div>
                           </div>
 
+                          <!--
+                            FanJam: the "Hide FanJam Branding" and "Hide Banner" options are always on, so their toggles are
+                            disabled. See FORM_ALWAYS_HIDE_BANNER / FORM_ALWAYS_HIDE_BRANDING in utils/viewUtils.ts.
+
                           <PaymentUpgradeBadgeProvider :feature="PlanFeatureTypes.FEATURE_HIDE_BRANDING">
                             <template #default="{ click }">
                               <div class="flex items-center justify-between gap-3">
-                                <!-- Hide NocoDB Branding -->
+                                Hide NocoDB Branding
 
                                 <span class="flex items-center gap-3">
                                   {{ $t('labels.hideNocodbBranding') }}
@@ -1977,7 +1990,7 @@ const { message: templatedMessage } = useTemplatedMessage(
                             </template>
                           </PaymentUpgradeBadgeProvider>
                           <div class="flex items-center justify-between gap-3">
-                            <!-- Hide Banner -->
+                            Hide Banner
                             <span>{{ $t('general.hide') }} {{ $t('general.banner') }}</span>
                             <a-switch
                               v-e="[`a:form-view:hide-banner`]"
@@ -1994,6 +2007,7 @@ const { message: templatedMessage } = useTemplatedMessage(
                                 }"
                             />
                           </div>
+                          -->
                         </div>
                       </div>
 
@@ -2148,10 +2162,6 @@ const { message: templatedMessage } = useTemplatedMessage(
                     </Pane>
                   </Splitpanes>
                 </template>
-
-                <div v-if="isLocked" class="absolute inset-0 bg-black/12 z-500 grid place-items-center px-6">
-                  <LazyDlgLockView />
-                </div>
               </div>
             </template>
           </SmartsheetFormLayout>

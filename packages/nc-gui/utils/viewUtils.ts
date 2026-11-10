@@ -64,6 +64,12 @@ export const defaultRowColorInfo: RowColoringInfo = {
   is_set_as_background: null,
 }
 
+// FanJam: the form banner and branding are always hidden. The per-form "Hide FanJam Branding" and
+// "Hide Banner" toggles are commented out in `components/smartsheet/Form.vue`; flip these to `false`
+// to restore the original per-form `meta.hide_banner` / `meta.hide_branding` behaviour.
+export const FORM_ALWAYS_HIDE_BANNER = true
+export const FORM_ALWAYS_HIDE_BRANDING = true
+
 export const getDefaultViewMetas = (viewType: ViewTypes) => {
   switch (viewType) {
     case ViewTypes.FORM:

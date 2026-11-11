@@ -44,6 +44,8 @@ const isExpandedForm = inject(IsExpandedFormOpenInj, ref(false))
 
 const column = inject(ColumnInj)!
 
+const { is12hrFormat } = useTimeFormatPreference()
+
 const isDateInvalid = ref(false)
 
 const datePickerRef = ref<HTMLInputElement>()
@@ -220,7 +222,7 @@ const handleUpdateValue = (e: Event, _isDatePicker: boolean, save = false) => {
       return
     }
 
-    targetValue = parseProp(column.value.meta).is12hrFormat
+    targetValue = is12hrFormat.value
       ? targetValue
           .trim()
           .toUpperCase()
@@ -230,13 +232,13 @@ const handleUpdateValue = (e: Event, _isDatePicker: boolean, save = false) => {
 
     const parsedDateValue = dayjs(
       targetValue,
-      parseProp(column.value.meta).is12hrFormat ? timeFormatsObj[timeFormat.value] : timeFormat.value,
+      is12hrFormat.value ? timeFormatsObj[timeFormat.value] : timeFormat.value,
     )
 
     if (parsedDateValue.isValid()) {
       const parsedDate = dayjsTz(
         targetValue,
-        parseProp(column.value.meta).is12hrFormat ? timeFormatsObj[timeFormat.value] : timeFormat.value,
+        is12hrFormat.value ? timeFormatsObj[timeFormat.value] : timeFormat.value,
       )
 
       tempDate.value = dayjsTz(`${(tempDate.value ?? dayjsTz()).format('YYYY-MM-DD')} ${parsedDate.format(timeFormat.value)}`)
@@ -296,7 +298,7 @@ const placeholder = computed(() => {
     return {
       dateTime: dateTimeFormat.value,
       date: dateFormat.value,
-      time: parseProp(column.value.meta).is12hrFormat ? `${timeFormat.value} AM` : timeFormat.value,
+      time: is12hrFormat.value ? `${timeFormat.value} AM` : timeFormat.value,
     }
   } else if (modelValue === null && showNull.value) {
     return t('general.null').toUpperCase()
@@ -456,12 +458,12 @@ function handleSelectTime(value: dayjs.Dayjs) {
 }
 
 const timeCellMaxWidth = computed(() => {
-  return timeCellMaxWidthMap?.[timeFormat.value]?.[parseProp(column.value.meta).is12hrFormat ? 12 : 24]
+  return timeCellMaxWidthMap?.[timeFormat.value]?.[is12hrFormat.value ? 12 : 24]
 })
 
 const cellValue = computed(
   () =>
-    localState.value?.format(parseProp(column.value.meta).is12hrFormat ? timeFormatsObj[timeFormat.value] : timeFormat.value) ??
+    localState.value?.format(is12hrFormat.value ? timeFormatsObj[timeFormat.value] : timeFormat.value) ??
     '',
 )
 
@@ -593,7 +595,7 @@ const minimizeMaxWidth = computed(() => {
               :selected-date="localState"
               :min-granularity="30"
               is-min-granularity-picker
-              :is12hr-format="!!parseProp(column.meta).is12hrFormat"
+              :is12hr-format="is12hrFormat"
               :is-open="isOpen"
               :show-current-date-option="showCurrentDateOption"
               :timezone="column?.meta?.timezone"

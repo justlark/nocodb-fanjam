@@ -99,6 +99,8 @@ provide(IsToolbarIconMode, isToolbarIconMode)
       <template v-if="!isMobileMode">
         <LazySmartsheetToolbarRowHeight v-if="isGrid" />
 
+        <LazySmartsheetToolbarTimeFormat v-if="isGrid || isGallery || isKanban || isMap" />
+
         <LazySmartsheetToolbarUploadData v-if="!isCalendar" />
 
         <LazySmartsheetToolbarOpenedViewAction v-if="!isCalendar" />

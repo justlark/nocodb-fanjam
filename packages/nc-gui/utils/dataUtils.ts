@@ -255,7 +255,8 @@ export const getDateTimeValue = (modelValue: string | null, params: ParsePlainCe
   const columnMeta = parseProp(col.meta)
   const dateFormat = columnMeta?.date_format ?? dateFormats[0]
   const timeFormat = columnMeta?.time_format ?? timeFormats[0]
-  const dateTimeFormat = `${dateFormat} ${timeFormat}`
+  // 12hr vs 24hr follows the user's local preference, not the column meta
+  const dateTimeFormat = `${dateFormat} ${isUserTime12hrFormat() ? `${timeFormat.replace('HH', 'hh')} A` : timeFormat}`
   const timezone = isEeUI && columnMeta?.timezone ? getTimeZoneFromName(columnMeta?.timezone) : undefined
   const { timezonize } = withTimezone(timezone?.name)
   const displayTimezone = timezone && columnMeta?.isDisplayTimezone ? ` (${timezone.abbreviation})` : ''
@@ -270,7 +271,7 @@ export const getDateTimeValue = (modelValue: string | null, params: ParsePlainCe
 }
 
 export const getTimeValue = (modelValue: string | null, col: ColumnType) => {
-  const timeFormat = parseProp(col?.meta)?.is12hrFormat ? 'hh:mm A' : 'HH:mm'
+  const timeFormat = isUserTime12hrFormat() ? 'hh:mm A' : 'HH:mm'
 
   if (!modelValue) {
     return ''

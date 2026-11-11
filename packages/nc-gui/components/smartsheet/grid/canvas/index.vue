@@ -2447,6 +2447,12 @@ watch(rowHeight, () => {
   requestAnimationFrame(triggerRefreshCanvas)
 })
 
+// Re-render time/datetime cells when the user's local 12hr/24hr preference changes
+const { is12hrFormat: userTimeIs12hrFormat } = useTimeFormatPreference()
+watch(userTimeIs12hrFormat, () => {
+  requestAnimationFrame(triggerRefreshCanvas)
+})
+
 // watch for column hide and re-render canvas
 watch([() => columns.value?.length, () => totalRows.value], () => {
   nextTick(() => {

@@ -178,7 +178,7 @@ export function useFillHandler({
     for (const [i, rowsOfCol] of rawMatrixTransposed.entries()) {
       const cpCol = cpCols[i]
       const populatedFillHandle = ColumnHelper.populateFillHandle({
-        column: cpCol!,
+        column: withUserTimeFormat(cpCol!),
         highlightedData: rowsOfCol,
         numberOfRows,
       })

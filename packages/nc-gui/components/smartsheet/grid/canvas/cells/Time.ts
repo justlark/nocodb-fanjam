@@ -5,7 +5,7 @@ export const TimeCellRenderer: CellRenderer = {
   render: (ctx, props) => {
     const { column, selected, value, x, y, width, height, pv, padding, textColor = '#4a5268', readonly } = props
 
-    const timeFormat = parseProp(column?.meta)?.is12hrFormat ? 'hh:mm A' : 'HH:mm'
+    const timeFormat = isUserTime12hrFormat() ? 'hh:mm A' : 'HH:mm'
 
     if (!value && selected && !readonly) {
       ctx.fillStyle = '#989FB1'
@@ -53,7 +53,7 @@ export const TimeCellRenderer: CellRenderer = {
 
     const canvasContext = defaultOffscreen2DContext
 
-    const timeFormat = parseProp(column?.columnObj?.meta)?.is12hrFormat ? 'hh:mm A' : 'HH:mm'
+    const timeFormat = isUserTime12hrFormat() ? 'hh:mm A' : 'HH:mm'
     let text = ''
 
     if (value) {

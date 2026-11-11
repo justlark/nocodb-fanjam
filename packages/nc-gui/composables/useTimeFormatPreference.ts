@@ -1,4 +1,5 @@
-import { StorageSerializers } from '@vueuse/core'
+// useStorage must be imported explicitly: @vueuse/nuxt excludes it from auto-imports (clashes with Nitro's useStorage)
+import { StorageSerializers, useStorage } from '@vueuse/core'
 import { type ColumnType, UITypes } from 'nocodb-sdk'
 
 const TIME_FORMAT_STORAGE_KEY = 'nc-time-format-is12hr'

@@ -71,7 +71,7 @@ export default function convertCellData(
      * This method can throw errors. so it's important to use a try-catch block when calling it.
      */
     serializedValue = ColumnHelper.serializeValue(value, {
-      col: column,
+      col: withUserTimeFormat(column),
       isMysql: (_sourceId) => isMysql,
       isMultipleCellPaste: isMultiple,
       clipboardItem: args.clipboardItem,

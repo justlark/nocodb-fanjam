@@ -40,6 +40,8 @@ const isUnderLookup = inject(IsUnderLookupInj, ref(false))
 
 const column = inject(ColumnInj)!
 
+const { is12hrFormat } = useTimeFormatPreference()
+
 const dateFormat = isMysql(column.value.source_id) ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD HH:mm:ssZ'
 
 const isTimeInvalid = ref(false)
@@ -124,7 +126,7 @@ const handleUpdateValue = (e: Event, save = false) => {
     return
   }
 
-  targetValue = parseProp(column.value.meta).is12hrFormat
+  targetValue = is12hrFormat.value
     ? targetValue
         .trim()
         .toUpperCase()
@@ -132,7 +134,7 @@ const handleUpdateValue = (e: Event, save = false) => {
         .replace(/\s+/g, ' ')
     : targetValue.trim()
 
-  const parsedDate = dayjs(targetValue, parseProp(column.value.meta).is12hrFormat ? 'hh:mm A' : 'HH:mm')
+  const parsedDate = dayjs(targetValue, is12hrFormat.value ? 'hh:mm A' : 'HH:mm')
 
   if (parsedDate.isValid()) {
     tempDate.value = dayjs(`${dayjs().format('YYYY-MM-DD')} ${parsedDate.format('HH:mm')}`)
@@ -200,7 +202,7 @@ const placeholder = computed(() => {
     (isGrid.value && !showNull.value && !isTimeInvalid.value && !isSystemColumn(column.value) && active.value) ||
     isEditColumn.value
   ) {
-    return parseProp(column.value.meta).is12hrFormat ? 'hh:mm AM' : 'HH:mm'
+    return is12hrFormat.value ? 'hh:mm AM' : 'HH:mm'
   } else if (modelValue === null && showNull.value) {
     return t('general.null').toUpperCase()
   } else if (isTimeInvalid.value) {
@@ -331,7 +333,7 @@ function handleSelectTime(value?: dayjs.Dayjs) {
   open.value = false
 }
 
-const cellValue = computed(() => localState.value?.format(parseProp(column.value.meta).is12hrFormat ? 'hh:mm A' : 'HH:mm') ?? '')
+const cellValue = computed(() => localState.value?.format(is12hrFormat.value ? 'hh:mm A' : 'HH:mm') ?? '')
 const canvasCellEventData = inject(CanvasCellEventDataInj, reactive<CanvasCellEventDataInjType>({}))
 onMounted(() => {
   if (isGrid.value && isCanvasInjected && !isExpandedForm.value && !isEditColumn.value && !isUnderLookup.value) {
@@ -395,7 +397,7 @@ onMounted(() => {
           :selected-date="localState"
           :min-granularity="30"
           is-min-granularity-picker
-          :is12hr-format="!!parseProp(column.meta).is12hrFormat"
+          :is12hr-format="is12hrFormat"
           :is-open="isOpen"
           @update:selected-date="handleSelectTime"
         />

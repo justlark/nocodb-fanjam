@@ -70,7 +70,7 @@ export function useFieldQuery() {
        * This method can throw errors. so it's important to use a try-catch block when calling it.
        */
       searchQuery = ColumnHelper.serializeValue(searchQuery, {
-        col,
+        col: withUserTimeFormat(col),
         isMysql,
         isPg,
         meta: tableMeta,

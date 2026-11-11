@@ -1498,7 +1498,9 @@
     "emptyScript": "Empty Script",
     "enterFullscreen": "Enter fullscreen",
     "exitFullscreen": "Exit fullscreen",
-    "selectRole": "Select Role"
+    "selectRole": "Select Role",
+    "time24HourFormat": "24-hour time",
+    "time24HourShort": "24h"
   },
   "activity": {
     "clickToResolve": "Click to resolve",
@@ -1890,7 +1892,8 @@
     "filterByLimitExceeded": "Filter by limit exceeded",
     "groupByLimitExceeded": "Group by limit exceeded",
     "youDoNotHavePermissionToPasteIntoThisField": "You do not have permission to paste into this field",
-    "pasteOperationLimitedToMaxRows": "Paste operation limited to {max} rows. Additional rows were truncated."
+    "pasteOperationLimitedToMaxRows": "Paste operation limited to {max} rows. Additional rows were truncated.",
+    "timeFormatLocalOnly": "Applies to all time fields. Saved only on this device."
   },
   "placeholder": {
     "searchIcons": "Search icons",

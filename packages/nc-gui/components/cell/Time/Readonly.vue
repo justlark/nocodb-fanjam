@@ -9,6 +9,8 @@ const { modelValue } = defineProps<Props>()
 
 const column = inject(ColumnInj)!
 
+const { is12hrFormat } = useTimeFormatPreference()
+
 const localState = computed(() => {
   if (!modelValue) {
     return undefined
@@ -28,7 +30,7 @@ const localState = computed(() => {
   return dateTime
 })
 
-const cellValue = computed(() => localState.value?.format(parseProp(column.value.meta).is12hrFormat ? 'hh:mm A' : 'HH:mm') ?? '')
+const cellValue = computed(() => localState.value?.format(is12hrFormat.value ? 'hh:mm A' : 'HH:mm') ?? '')
 </script>
 
 <template>

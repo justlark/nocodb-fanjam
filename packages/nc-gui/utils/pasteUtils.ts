@@ -52,7 +52,7 @@ export const valueToCopy = (
   }
 
   result.textToCopy = ColumnHelper.parseValue(textToCopy, {
-    col: columnObj,
+    col: withUserTimeFormat(columnObj),
     isMysql,
     isPg,
     meta,

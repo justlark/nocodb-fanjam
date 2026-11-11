@@ -12,6 +12,8 @@ const { modelValue, isUpdatedFromCopyNPaste } = defineProps<Props>()
 
 const column = inject(ColumnInj)!
 
+const { is12hrFormat } = useTimeFormatPreference()
+
 const isUnderLookup = inject(IsUnderLookupInj, ref(false))
 
 const { isXcdbBase } = useBase()
@@ -67,12 +69,12 @@ const timeZoneDisplay = computed(() => {
 
 const cellValue = computed(
   () =>
-    localState.value?.format(parseProp(column.value.meta).is12hrFormat ? timeFormatsObj[timeFormat.value] : timeFormat.value) ??
+    localState.value?.format(is12hrFormat.value ? timeFormatsObj[timeFormat.value] : timeFormat.value) ??
     '',
 )
 
 const timeCellMaxWidth = computed(() => {
-  return timeCellMaxWidthMap?.[timeFormat.value]?.[parseProp(column.value.meta).is12hrFormat ? 12 : 24]
+  return timeCellMaxWidthMap?.[timeFormat.value]?.[is12hrFormat.value ? 12 : 24]
 })
 </script>
 

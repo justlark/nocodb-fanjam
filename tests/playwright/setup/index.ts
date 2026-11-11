@@ -500,6 +500,18 @@ const setup = async ({
 
   await page.addInitScript(() => (window.isPlaywright = true));
 
+  // The 12hr/24hr time display defaults to the browser locale (en-US => 12hr) when unset.
+  // Pin it to 24hr so time assertions don't depend on the runner's locale.
+  await page.addInitScript(() => {
+    try {
+      if (window.localStorage.getItem('nc-time-format-is12hr') === null) {
+        window.localStorage.setItem('nc-time-format-is12hr', 'false');
+      }
+    } catch (e) {
+      // ignore: storage may be unavailable
+    }
+  });
+
   await page.goto(baseUrl, {
     waitUntil: 'networkidle',
   });

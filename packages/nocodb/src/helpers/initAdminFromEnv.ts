@@ -280,5 +280,23 @@ export default async function initAdminFromEnv(_ncMeta = Noco.ncMeta) {
       await ncMeta.rollback(e);
       throw e;
     }
+  } else if (await User.isFirst(_ncMeta)) {
+    // Public signup is permanently disabled, so without these env vars there
+    // would be no way to create the initial super admin.
+    console.log(
+      '\n',
+      boxen(
+        'Signup is invite-only, so the initial super admin must be created from the environment.\n\nSet both NC_ADMIN_EMAIL and NC_ADMIN_PASSWORD and restart.',
+        {
+          title: 'Admin credentials required',
+          padding: 1,
+          borderStyle: 'double',
+          titleAlignment: 'center',
+          borderColor: 'red',
+        },
+      ),
+      '\n',
+    );
+    process.exit(1);
   }
 }

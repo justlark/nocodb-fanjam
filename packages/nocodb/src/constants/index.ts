@@ -2,6 +2,9 @@ import { PublicAttachmentScope } from 'nocodb-sdk';
 
 export const NC_LICENSE_KEY = 'nc-license-key';
 export const NC_APP_SETTINGS = 'nc-app-settings';
+// FanJam: public signup is permanently disabled. All instances are
+// invite-only, so NC_ADMIN_EMAIL / NC_ADMIN_PASSWORD are required on deploy.
+export const NC_INVITE_ONLY_SIGNUP = true;
 export const NC_NON_ATTACHMENT_FIELD_SIZE =
   +process.env['NC_NON_ATTACHMENT_FIELD_SIZE'] || 10 * 1024 * 1024; // 10 MB
 export const NC_ATTACHMENT_FIELD_SIZE =

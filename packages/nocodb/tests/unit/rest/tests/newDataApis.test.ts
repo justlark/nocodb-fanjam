@@ -105,7 +105,7 @@ import {
 import { createView, updateView } from '../../factory/view';
 
 import { isPg } from '../../init/db';
-import { defaultUserArgs } from '../../factory/user';
+import { createUser, defaultUserArgs } from '../../factory/user';
 import type { ColumnType } from 'nocodb-sdk';
 import type Base from '~/models/Base';
 import type Model from '../../../../src/models/Model';
@@ -2926,12 +2926,10 @@ function userFieldBased() {
   });
 
   async function addUsers(email) {
-    const response = await request(context.app)
-      .post('/api/v1/auth/user/signup')
-      .send({ email, password: defaultUserArgs.password })
-      .expect(200);
-
-    const token = response.body.token;
+    const { token } = await createUser(context, {
+      email,
+      password: defaultUserArgs.password,
+    });
     expect(token).to.be.a('string');
 
     // invite users to workspace

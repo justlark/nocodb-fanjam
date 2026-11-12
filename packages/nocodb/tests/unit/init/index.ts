@@ -2,7 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import nocobuild from '../../../src/nocobuild';
 // import { Noco } from '../../../src/lib';
-import { createUser } from '../factory/user';
+import { createUser, defaultUserArgs } from '../factory/user';
 import cleanupMeta from './cleanupMeta';
 import { cleanUpSakila, resetAndSeedSakila } from './cleanupSakila';
 import type { Base } from '../../../src/models';
@@ -13,6 +13,12 @@ let server;
 let nestApp: INestApplication<any>;
 
 const serverInit = async () => {
+  // Signup is invite-only, so the server refuses to boot on an empty meta DB
+  // without admin credentials. The admin user created from these is wiped by
+  // cleanupMeta() on every init() and recreated by createUser().
+  process.env.NC_ADMIN_EMAIL ??= defaultUserArgs.email;
+  process.env.NC_ADMIN_PASSWORD ??= defaultUserArgs.password;
+
   const serverInstance = express();
   serverInstance.enable('trust proxy');
   // serverInstance.use(await Noco.init());

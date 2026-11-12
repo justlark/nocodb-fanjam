@@ -12,7 +12,7 @@ import type { NcRequest } from '~/interface/config';
 import { AppHooksService } from '~/services/app-hooks/app-hooks.service';
 import { BaseUsersService } from '~/services/base-users/base-users.service';
 import { MailService } from '~/services/mail/mail.service';
-import { NC_APP_SETTINGS } from '~/constants';
+import { NC_APP_SETTINGS, NC_INVITE_ONLY_SIGNUP } from '~/constants';
 import { validatePayload } from '~/helpers';
 import { NcError } from '~/helpers/catchError';
 import { extractProps } from '~/helpers/extractProps';
@@ -299,16 +299,24 @@ export class OrgUsersService {
   }
 
   async appSettingsGet() {
-    let settings = {};
+    let settings: { invite_only_signup?: boolean } = {};
     try {
       settings = JSON.parse((await Store.get(NC_APP_SETTINGS))?.value);
     } catch {}
-    return settings;
+    return {
+      ...settings,
+      invite_only_signup:
+        NC_INVITE_ONLY_SIGNUP || !!settings?.invite_only_signup,
+    };
   }
 
   async appSettingsSet(param: { settings: any }) {
+    const settings = { ...(param.settings ?? {}) };
+    if (NC_INVITE_ONLY_SIGNUP) {
+      settings.invite_only_signup = true;
+    }
     await Store.saveOrUpdate({
-      value: JSON.stringify(param.settings),
+      value: JSON.stringify(settings),
       key: NC_APP_SETTINGS,
     });
     return true;

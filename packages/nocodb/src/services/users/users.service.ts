@@ -15,7 +15,7 @@ import type {
 import type { NcRequest } from '~/interface/config';
 import { T } from '~/utils';
 import { genJwt, setTokenCookie } from '~/services/users/helpers';
-import { NC_APP_SETTINGS } from '~/constants';
+import { NC_APP_SETTINGS, NC_INVITE_ONLY_SIGNUP } from '~/constants';
 import { AppHooksService } from '~/services/app-hooks/app-hooks.service';
 import { validatePayload } from '~/helpers';
 import { MetaService } from '~/meta/meta.service';
@@ -145,6 +145,12 @@ export class UsersService {
     ncMeta = Noco.ncMeta,
   ) {
     this.validateEmailPattern(email);
+
+    // Signup is hardcoded as invite-only, including for the first user (the
+    // initial super admin must come from NC_ADMIN_EMAIL / NC_ADMIN_PASSWORD).
+    if (NC_INVITE_ONLY_SIGNUP && !is_invite) {
+      NcError.badRequest('Not allowed to signup, contact super admin.');
+    }
 
     let roles: string = OrgUserRoles.CREATOR;
 

@@ -4,6 +4,17 @@ import type { RuleObject } from 'ant-design-vue/es/form'
 
 definePageMeta({
   requiresAuth: false,
+  middleware: [
+    (to) => {
+      const { appInfo } = useGlobal()
+
+      // Public signup is disabled (invite-only). Only invite links, which carry a
+      // token (`/signup/<token>`), may use this page; send everyone else to sign-in.
+      if (appInfo.value.inviteOnlySignup && !to.params.token) {
+        return navigateTo({ path: '/signin', query: to.query })
+      }
+    },
+  ],
 })
 
 const { $e } = useNuxtApp()

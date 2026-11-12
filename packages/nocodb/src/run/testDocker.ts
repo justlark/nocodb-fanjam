@@ -1,9 +1,12 @@
 import dns from 'node:dns';
+import { promisify } from 'util';
 import axios from 'axios';
+import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import express from 'express';
 import Noco from '~/Noco';
 import { User } from '~/models';
+import { randomTokenString } from '~/helpers/stringHelpers';
 // In test mode we never want the backend to crash — workers should get
 // proper HTTP error responses rather than ECONNREFUSED. Log all errors but
 // don't exit (production entry points use handleUncaughtErrors instead).
@@ -33,6 +36,13 @@ server.set('view engine', 'ejs');
 process.env[`DEBUG`] = 'xc*';
 process.env[`NC_ALLOW_LOCAL_HOOKS`] = 'true';
 
+// Public signup is permanently disabled (invite-only), so the super admin is
+// created from the environment and the extra test users are inserted directly.
+const TEST_ADMIN_EMAIL = 'user@nocodb.com';
+const TEST_PASSWORD = 'Password123.';
+process.env.NC_ADMIN_EMAIL ??= TEST_ADMIN_EMAIL;
+process.env.NC_ADMIN_PASSWORD ??= TEST_PASSWORD;
+
 // Wrap the async init logic so that any unhandled rejection inside the
 // listen callback causes an explicit exit rather than being silently swallowed
 // or (in Node.js 15+) crashing the process with a cryptic error.
@@ -58,65 +68,34 @@ function startServer() {
           // the backend stays up and tests will see sign-in errors rather than
           // ECONNREFUSED.
           try {
-            let admin_response;
-            if (!(await User.getByEmail('user@nocodb.com'))) {
-              admin_response = await axios.post(
-                `http://localhost:${
-                  process.env.PORT || 8080
-                }/api/v1/auth/user/signup`,
-                {
-                  email: 'user@nocodb.com',
-                  password: 'Password123.',
-                },
-              );
-              console.log(admin_response.data);
-            } else {
-              admin_response = await axios.post(
-                `http://localhost:${
-                  process.env.PORT || 8080
-                }/api/v1/auth/user/signin`,
-                {
-                  email: 'user@nocodb.com',
-                  password: 'Password123.',
-                },
-              );
-            }
+            // The admin itself is created by initAdminFromEnv during Noco.init().
+            const admin_response = await axios.post(
+              `http://localhost:${
+                process.env.PORT || 8080
+              }/api/v1/auth/user/signin`,
+              {
+                email: TEST_ADMIN_EMAIL,
+                password: TEST_PASSWORD,
+              },
+            );
+            console.log(admin_response.data);
 
             for (let i = 0; i < 4; i++) {
-              if (!(await User.getByEmail(`user-${i}@nocodb.com`))) {
-                const response = await axios.post(
-                  `http://localhost:${
-                    process.env.PORT || 8080
-                  }/api/v1/auth/user/signup`,
-                  {
-                    email: `user-${i}@nocodb.com`,
-                    password: 'Password123.',
-                  },
+              const email = `user-${i}@nocodb.com`;
+              if (!(await User.getByEmail(email))) {
+                const salt = await promisify(bcrypt.genSalt)(10);
+                const password = await promisify(bcrypt.hash)(
+                  TEST_PASSWORD,
+                  salt,
                 );
-                console.log(response.data);
-
-                const user = await axios.get(
-                  `http://localhost:${process.env.PORT || 8080}/api/v1/auth/user/me`,
-                  {
-                    headers: {
-                      'xc-auth': response.data.token,
-                    },
-                  },
-                );
-
-                const response2 = await axios.patch(
-                  `http://localhost:${process.env.PORT || 8080}/api/v1/users/${
-                    user.data.id
-                  }`,
-                  { roles: 'org-level-creator' },
-                  {
-                    headers: {
-                      'xc-auth': admin_response.data.token,
-                    },
-                  },
-                );
-
-                console.log(response2.data);
+                const user = await User.insert({
+                  email,
+                  salt,
+                  password,
+                  roles: 'org-level-creator',
+                  token_version: randomTokenString(),
+                });
+                console.log(`Created test user ${user.email}`);
               }
             }
           } catch (e) {

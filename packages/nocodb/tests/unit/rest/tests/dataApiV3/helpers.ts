@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import request from 'supertest';
 import { type ColumnType, WorkspaceUserRoles } from 'nocodb-sdk';
-import { defaultUserArgs } from '../../../factory/user';
+import { createUser, defaultUserArgs } from '../../../factory/user';
 import type { ITestContext } from '../../../init';
 
 export const normalizeObject = (obj) => {
@@ -61,16 +61,11 @@ export async function addUsers(
   email: string,
   displayName?: string,
 ) {
-  const response = await request(testContext.context.app)
-    .post('/api/v1/auth/user/signup')
-    .send({
-      email,
-      password: defaultUserArgs.password,
-      display_name: displayName,
-    })
-    .expect(200);
-
-  const token = response.body.token;
+  const { token } = await createUser(testContext.context, {
+    email,
+    password: defaultUserArgs.password,
+    display_name: displayName,
+  });
   expect(token).to.be.a('string');
 
   // invite users to workspace

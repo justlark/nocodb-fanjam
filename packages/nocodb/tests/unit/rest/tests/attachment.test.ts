@@ -5,6 +5,7 @@ import { OrgUserRoles, ProjectRoles } from 'nocodb-sdk';
 import 'mocha';
 import request from 'supertest';
 import { createProject } from '../../factory/base';
+import { createUser } from '../../factory/user';
 import init from '../../init';
 
 const FILE_PATH = path.join(__dirname, 'test.txt');
@@ -52,15 +53,12 @@ function attachmentTests() {
       password: 'A1234abh2@dsad',
     };
 
-    const signupResponse = await request(context.app)
-      .post('/api/v1/auth/user/signup')
-      .send(args)
-      .expect(200);
+    const { token } = await createUser(context, args);
 
     const response = await request(context.app)
       .post('/api/v1/db/storage/upload')
       .attach('files', FILE_PATH)
-      .set('xc-auth', signupResponse.body.token)
+      .set('xc-auth', token)
       .expect(400);
 
     const msg = response.body.msg;
@@ -74,10 +72,7 @@ function attachmentTests() {
       password: 'A1234abh2@dsad',
     };
 
-    await request(context.app)
-      .post('/api/v1/auth/user/signup')
-      .send(args)
-      .expect(200);
+    await createUser(context, args);
 
     // update user role to creator
     const usersListResponse = await request(context.app)
@@ -124,10 +119,7 @@ function attachmentTests() {
         password: 'A1234abh2@dsad',
       };
 
-      await request(context.app)
-        .post('/api/v1/auth/user/signup')
-        .send(args)
-        .expect(200);
+      await createUser(context, args);
 
       const newProject = await createProject(context, {
         title: 'NewTitle1',

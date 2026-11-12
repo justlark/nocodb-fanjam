@@ -1373,6 +1373,7 @@
     "agreeToTos": "By signing up, you agree to the Terms of Service",
     "welcomeToNc": "Welcome to FanJam!",
     "inviteOnlySignup": "Allow signup only using invite url",
+    "inviteOnlySignupLocked": "Signup is permanently invite-only on this instance",
     "nextRow": "Next record",
     "prevRow": "Prev record",
     "addRowGrid": "Manually add data in grid view",

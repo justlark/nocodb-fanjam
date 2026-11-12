@@ -34,14 +34,15 @@ function authTests() {
     console.timeEnd('#### authTests');
   });
 
-  it('Signup with valid email', async () => {
+  it('Signup with valid email is rejected (invite-only)', async () => {
     const response = await request(context.app)
       .post('/api/v1/auth/user/signup')
       .send({ email: 'new@example.com', password: defaultUserArgs.password })
-      .expect(200);
+      .expect(400);
 
-    const token = response.body.token;
-    expect(token).to.be.a('string');
+    expect(response.body.msg).to.be.equal(
+      'Not allowed to signup, contact super admin.',
+    );
   });
 
   it('Signup with invalid email', async () => {

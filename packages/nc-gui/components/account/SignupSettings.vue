@@ -3,7 +3,9 @@ const { api } = useApi()
 
 const { t } = useI18n()
 
-const settings = ref<{ invite_only_signup?: boolean }>({ invite_only_signup: false })
+// Invite-only signup is hardcoded on (backend always reports `true`), so the
+// checkbox below is shown checked and disabled.
+const settings = ref<{ invite_only_signup?: boolean }>({ invite_only_signup: true })
 
 const loadSettings = async () => {
   try {
@@ -41,18 +43,22 @@ loadSettings()
     <div class="nc-content-max-w p-6 h-[calc(100vh_-_100px)] flex flex-col gap-6 overflow-auto nc-scrollbar-thin">
       <div class="flex flex-col items-center">
         <div class="flex items-center gap-2">
-          <a-form-item>
-            <a-checkbox
-              v-model:checked="settings.invite_only_signup"
-              v-e="['c:account:enable-signup']"
-              class="nc-checkbox nc-invite-only-signup-checkbox !mt-6"
-              name="virtual"
-              @change="saveSettings"
-            />
-          </a-form-item>
-          <span data-rec="true">
-            {{ $t('labels.inviteOnlySignup') }}
-          </span>
+          <NcTooltip placement="top" class="flex items-center gap-2">
+            <template #title>{{ $t('labels.inviteOnlySignupLocked') }}</template>
+            <a-form-item>
+              <a-checkbox
+                v-model:checked="settings.invite_only_signup"
+                v-e="['c:account:enable-signup']"
+                class="nc-checkbox nc-invite-only-signup-checkbox !mt-6"
+                name="virtual"
+                disabled
+                @change="saveSettings"
+              />
+            </a-form-item>
+            <span data-rec="true" class="text-nc-content-gray-disabled">
+              {{ $t('labels.inviteOnlySignup') }}
+            </span>
+          </NcTooltip>
         </div>
       </div>
     </div>

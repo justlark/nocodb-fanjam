@@ -108,7 +108,7 @@ import {
 } from '../../factory/column';
 import { createView, updateView } from '../../factory/view';
 
-import { defaultUserArgs } from '../../factory/user';
+import { createUser, defaultUserArgs } from '../../factory/user';
 import { runOnSet } from '../../utils/runOnSet';
 import type { ColumnType } from 'nocodb-sdk';
 import type { Base, Model } from '../../../../src/models';
@@ -3645,16 +3645,11 @@ export default function (API_VERSION: 'v2' | 'v3') {
       });
 
       async function addUsers(email: string, displayName?: string) {
-        const response = await request(context.app)
-          .post('/api/v1/auth/user/signup')
-          .send({
-            email,
-            password: defaultUserArgs.password,
-            display_name: displayName,
-          })
-          .expect(200);
-
-        const token = response.body.token;
+        const { token } = await createUser(context, {
+          email,
+          password: defaultUserArgs.password,
+          display_name: displayName,
+        });
         expect(token).to.be.a('string');
 
         // invite users to workspace

@@ -172,17 +172,28 @@ function authTests() {
     expect(response.body.list).to.have.length(0);
   });
 
-  it('Disable/Enable signup', async () => {
+  it('Signup is always invite-only', async () => {
     const args = {
       email: 'dummyuser@example.com',
       password: 'A1234abh2@dsad',
     };
 
+    // trying to turn invite-only off has no effect
     await request(context.app)
       .post('/api/v1/app-settings')
       .set('xc-auth', context.token)
-      .send({ invite_only_signup: true })
+      .send({ invite_only_signup: false })
       .expect(200);
+
+    const settingsRes = await request(context.app)
+      .get('/api/v1/app-settings')
+      .set('xc-auth', context.token)
+      .expect(200);
+
+    expect(settingsRes.body)
+      .to.be.an('object')
+      .to.have.property('invite_only_signup')
+      .to.be.equal(true);
 
     const failedRes = await request(context.app)
       .post('/api/v1/auth/user/signup')
@@ -193,32 +204,6 @@ function authTests() {
       .to.be.an('object')
       .to.have.property('msg')
       .to.be.equal('Not allowed to signup, contact super admin.');
-
-    await request(context.app)
-      .post('/api/v1/app-settings')
-      .set('xc-auth', context.token)
-      .send({ invite_only_signup: false })
-      .expect(200);
-
-    const successRes = await request(context.app)
-      .post('/api/v1/auth/user/signup')
-      .send(args)
-      .expect(200);
-
-    expect(successRes.body)
-      .to.be.an('object')
-      .to.have.property('token')
-      .to.be.a('string');
-
-    const userMeRes = await request(context.app)
-      .get('/api/v1/auth/user/me')
-      .set('xc-auth', successRes.body.token)
-      .expect(200);
-
-    expect(userMeRes.body)
-      .to.be.an('object')
-      .to.have.property('email')
-      .to.be.eq(args.email);
   });
 }
 

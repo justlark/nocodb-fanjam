@@ -11,6 +11,7 @@ import type { AppConfig, NcRequest } from '~/interface/config';
 import {
   NC_APP_SETTINGS,
   NC_ATTACHMENT_FIELD_SIZE,
+  NC_INVITE_ONLY_SIGNUP,
   NC_MAX_ATTACHMENTS_ALLOWED,
 } from '~/constants';
 import SqlMgrv2 from '~/db/sql-mgr/v2/SqlMgrv2';
@@ -472,7 +473,7 @@ export class UtilsService {
       feedEnabled: process.env.NC_DISABLE_PRODUCT_FEED !== 'true',
       mainSubDomain: this.configService.get('mainSubDomain', { infer: true }),
       dashboardPath: this.configService.get('dashboardPath', { infer: true }),
-      inviteOnlySignup: settings.invite_only_signup,
+      inviteOnlySignup: NC_INVITE_ONLY_SIGNUP || settings.invite_only_signup,
       samlProviderName,
       samlAuthEnabled,
       prodReady: Noco.getConfig()?.meta?.db?.client !== DriverClient.SQLITE,

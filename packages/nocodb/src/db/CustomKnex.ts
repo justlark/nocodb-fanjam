@@ -1057,6 +1057,40 @@ type CustomTransaction = Knex.Transaction & {
   _aborted?: boolean;
 };
 
+// When the host is suspended (e.g. a Fly machine with `auto_stop_machines:
+// suspend`), idle pooled connections are frozen along with the process, but
+// the database server drops its side in the meantime. On resume, the pool's
+// idle reaper races incoming requests, and requests that win get handed a dead
+// socket (`read ECONNRESET`). Reject idle connections at checkout using the
+// same idle threshold as the reaper, so tarn transparently replaces them. This
+// never fires during normal operation, since the reaper would have already
+// destroyed any connection idle that long.
+function rejectStaleIdleConnections(kn: Knex) {
+  const client = kn.client as any;
+
+  // SQLite connections are local, and destroying an in-memory one loses data.
+  if (['sqlite3', 'better-sqlite3'].includes(client.dialect)) return;
+
+  const maxIdleMs = client.config?.pool?.idleTimeoutMillis ?? 30000;
+
+  const releaseConnection = client.releaseConnection.bind(client);
+  client.releaseConnection = (connection: any) => {
+    connection.__ncReleasedAt = Date.now();
+    return releaseConnection(connection);
+  };
+
+  const validateConnection = client.validateConnection.bind(client);
+  client.validateConnection = (connection: any) => {
+    if (
+      connection.__ncReleasedAt &&
+      Date.now() - connection.__ncReleasedAt >= maxIdleMs
+    ) {
+      return false;
+    }
+    return validateConnection(connection);
+  };
+}
+
 function CustomKnex(
   arg: string | Knex.Config<any> | any,
   extDb?: any,
@@ -1066,6 +1100,8 @@ function CustomKnex(
   }
 
   const kn: CustomKnex = knex(arg);
+
+  rejectStaleIdleConnections(kn);
 
   const knexRaw = kn.raw.bind(kn);
   const knexTransaction = kn.transaction.bind(kn);

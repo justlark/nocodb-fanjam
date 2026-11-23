@@ -37,9 +37,9 @@ export const Welcome = ({ email, link }: WelcomeTemplateProps) => (
             FanJam is an event planning app for conventions.
           </Text>
           <Text className="text-gray-600 text-center text-sm !mt-0">
-            For small to medium-size cons, FanJam bridges the gap between a
-            single person with a spreadsheet and the kinds of people who can
-            afford enterprise event planning software. Free for small cons.
+            FanJam bridges the gap between a single person with a spreadsheet
+            and the kinds of people who can afford enterprise event planning
+            software.
           </Text>
           <Button
             className="text-center w-full text-base font-bold bg-brand-500 text-white rounded-lg h-10"

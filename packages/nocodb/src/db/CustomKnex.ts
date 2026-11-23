@@ -1,3 +1,5 @@
+import { performance } from 'perf_hooks';
+import { Logger } from '@nestjs/common';
 import { Knex, knex } from 'knex';
 import { defaults, types } from 'pg';
 import dayjs from 'dayjs';
@@ -1057,6 +1059,74 @@ type CustomTransaction = Knex.Transaction & {
   _aborted?: boolean;
 };
 
+// When the host is suspended (e.g. a Fly machine with `auto_stop_machines:
+// suspend`), pooled connections are frozen along with the process, and they
+// are dead on resume no matter how briefly the machine was suspended. The
+// pool doesn't find out until a query fails with `read ECONNRESET`.
+//
+// To detect a freeze, a 1s heartbeat records when the process last ran. If
+// more than FREEZE_THRESHOLD_MS has passed since then, the process was frozen,
+// and we start a new "epoch". Connections returned to the pool in an earlier
+// epoch are rejected at checkout, so tarn transparently replaces them. The
+// check also runs at checkout itself, so it doesn't race the first requests
+// after a resume the way a timer would.
+const FREEZE_THRESHOLD_MS = 5000;
+const freezeLogger = new Logger('StaleDbConnections');
+let freezeHeartbeat: NodeJS.Timeout | undefined;
+let lastTickWall = Date.now();
+let lastTickMono = performance.now();
+let poolEpoch = 0;
+
+function currentPoolEpoch() {
+  const nowWall = Date.now();
+  const nowMono = performance.now();
+  // Check both clocks, since it isn't guaranteed that both advance while a
+  // VM is suspended.
+  const gapMs = Math.max(nowWall - lastTickWall, nowMono - lastTickMono);
+  if (gapMs > FREEZE_THRESHOLD_MS) {
+    poolEpoch++;
+    freezeLogger.log(
+      `Process was frozen for ${Math.round(
+        gapMs / 1000,
+      )}s; discarding idle database connections`,
+    );
+  }
+  lastTickWall = nowWall;
+  lastTickMono = nowMono;
+  return poolEpoch;
+}
+
+function rejectConnectionsFromBeforeFreeze(kn: Knex) {
+  const client = kn.client as any;
+
+  // SQLite connections are local, and destroying an in-memory one loses data.
+  if (['sqlite3', 'better-sqlite3'].includes(client.dialect)) return;
+
+  if (!freezeHeartbeat) {
+    lastTickWall = Date.now();
+    lastTickMono = performance.now();
+    freezeHeartbeat = setInterval(currentPoolEpoch, 1000);
+    freezeHeartbeat.unref();
+  }
+
+  const releaseConnection = client.releaseConnection.bind(client);
+  client.releaseConnection = (connection: any) => {
+    connection.__ncPoolEpoch = currentPoolEpoch();
+    return releaseConnection(connection);
+  };
+
+  const validateConnection = client.validateConnection.bind(client);
+  client.validateConnection = (connection: any) => {
+    if (
+      connection.__ncPoolEpoch !== undefined &&
+      connection.__ncPoolEpoch !== currentPoolEpoch()
+    ) {
+      return false;
+    }
+    return validateConnection(connection);
+  };
+}
+
 function CustomKnex(
   arg: string | Knex.Config<any> | any,
   extDb?: any,
@@ -1066,6 +1136,8 @@ function CustomKnex(
   }
 
   const kn: CustomKnex = knex(arg);
+
+  rejectConnectionsFromBeforeFreeze(kn);
 
   const knexRaw = kn.raw.bind(kn);
   const knexTransaction = kn.transaction.bind(kn);
